@@ -43,9 +43,9 @@ investi après 24 h de jeu simulé).
 | 4 emplacements : Flacon, Manteau, Lentille, Gantelet | ✅ |
 | 6 paliers de pureté : Trouble → Clair → Prismatique → Éthéré → Quintessence → Absolu | ✅ |
 | Distillation avec secondaires aléatoires, auto-équipement du meilleur | ✅ |
-| Affinage par niveaux (+12 % / niveau), dissolution en réactifs | ✅ |
+| Affinage par niveaux (+14 % Puissance/Intégrité, +4 % sur les pourcentages), dissolution en réactifs | ✅ |
 | 6 districts × 20 vagues, gardien de fin de district | ✅ |
-| Sauvegarde locale + progression hors-ligne (plafond 8 h, 60 % d'efficacité) | ✅ |
+| Sauvegarde locale + progression hors-ligne (8 h à 60 %, extensible par la recherche) | ✅ |
 | Arbre de recherche : 3 branches, 15 nœuds, prérequis, achat max | ✅ |
 | Ascension, compétences, familiers, montures | à venir |
 
