@@ -475,6 +475,14 @@ main {
   display: block;
 }
 
+.lab-scene.clickable {
+  cursor: pointer;
+}
+
+.lab-scene.clickable:active {
+  filter: brightness(1.12);
+}
+
 .lab-scene.cold {
   filter: saturate(0.35) brightness(0.8);
 }

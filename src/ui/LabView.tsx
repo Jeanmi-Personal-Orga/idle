@@ -1,10 +1,26 @@
-import { PURITIES, SLOTS } from '../game/content';
+import { PURITIES, SLOTS, slotDef } from '../game/content';
 import { formatDuration, formatNum, startDistillation, upgradeLab } from '../game/engine';
-import { distillCost, distillDuration, labUpgradeCost, purityWeights } from '../game/formulas';
+import {
+  distillCost,
+  distillDuration,
+  itemScore,
+  labUpgradeCost,
+  purityWeights,
+} from '../game/formulas';
 import { mods as allMods } from '../game/modifiers';
 import { store, useGame } from '../game/store';
+import type { GameState, SlotId } from '../game/types';
 import { Cauldron } from './Cauldron';
 import { PurityLegend } from './ItemCard';
+
+/** Emplacement le plus faible : vide d'abord, sinon le moins bon score. */
+function weakestSlot(state: GameState): SlotId {
+  const empty = SLOTS.find((s) => !state.equipped[s.id]);
+  if (empty) return empty.id;
+  return SLOTS.reduce((worst, s) =>
+    itemScore(state.equipped[s.id]!) < itemScore(state.equipped[worst.id]!) ? s : worst,
+  ).id;
+}
 
 export function LabView() {
   const state = useGame();
@@ -14,20 +30,28 @@ export function LabView() {
   const weights = purityWeights(state.labLevel, mods);
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   const d = state.distilling;
+  const ready = !d && state.resources.reagent >= cost;
+  // Le chaudron est un bouton : il relance la pièce qui manque le plus, pour
+  // qu'un joueur puisse jouer sans jamais lire la liste des emplacements.
+  const suggested = weakestSlot(state);
 
   return (
     <div className="view">
       {/* La pièce, pas un chiffre : elle se remplit à mesure qu'elle grandit. */}
       <div className="card scene">
-        <Cauldron state={state} mods={mods} />
+        <Cauldron
+          state={state}
+          mods={mods}
+          onClick={ready ? () => store.act((s) => startDistillation(s, suggested)) : undefined}
+        />
         <div className="row between">
           <div>
             <div className="label">Laboratoire · niveau {state.labLevel}</div>
             <div className="muted small">
               {d
                 ? `${SLOTS.find((s) => s.id === d.slot)!.name} · ${formatDuration(d.remaining)} restant`
-                : state.resources.reagent >= cost
-                  ? `Distillation en ${formatDuration(distillDuration(state.labLevel, mods))}`
+                : ready
+                  ? `Touche le chaudron pour distiller un ${slotDef(suggested).name.toLowerCase()} — ${formatDuration(distillDuration(state.labLevel, mods))}`
                   : 'Foyer éteint — il manque des réactifs'}
             </div>
           </div>

@@ -36,7 +36,9 @@ export function Cauldron({
 
   return (
     <svg
-      className={`lab-scene ${lit ? 'lit' : 'cold'} ${brewing ? 'brewing' : ''}`}
+      className={`lab-scene ${lit ? 'lit' : 'cold'} ${brewing ? 'brewing' : ''} ${
+        onClick ? 'clickable' : ''
+      }`}
       viewBox="0 0 200 130"
       role="img"
       aria-label={
