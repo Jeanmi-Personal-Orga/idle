@@ -11,14 +11,25 @@ export const STATS: Record<StatKey, { name: string; suffix: string; short: strin
   rupture: { name: 'Rupture', suffix: '%', short: 'RUP' },
 };
 
-/** Paliers de pureté : multiplicateur de stats et poids de tirage de base. */
-export const PURITIES: { id: PurityId; name: string; mult: number; color: string }[] = [
-  { id: 'trouble', name: 'Trouble', mult: 1, color: '#8a8f98' },
-  { id: 'clair', name: 'Clair', mult: 2.4, color: '#4db4d8' },
-  { id: 'prismatique', name: 'Prismatique', mult: 6, color: '#7d6ce0' },
-  { id: 'ethere', name: 'Éthéré', mult: 15, color: '#d06fd0' },
-  { id: 'quintessence', name: 'Quintessence', mult: 38, color: '#e0a13c' },
-  { id: 'absolu', name: 'Absolu', mult: 95, color: '#e8e4d0' },
+/**
+ * Paliers de pureté : multiplicateur de stats, poids de tirage, et signes
+ * visuels. Couleur *et* cadre, jamais la couleur seule — lisibilité daltonienne
+ * et en plein soleil (direction-artistique.md §5).
+ */
+export const PURITIES: {
+  id: PurityId;
+  name: string;
+  mult: number;
+  color: string;
+  /** Classe CSS du cadre et de son effet. */
+  frame: string;
+}[] = [
+  { id: 'trouble', name: 'Trouble', mult: 1, color: '#6e737d', frame: 'f-trouble' },
+  { id: 'clair', name: 'Clair', mult: 2.4, color: '#cdd6dd', frame: 'f-clair' },
+  { id: 'prismatique', name: 'Prismatique', mult: 6, color: '#4fd6a0', frame: 'f-prismatique' },
+  { id: 'ethere', name: 'Éthéré', mult: 15, color: '#9b7fe0', frame: 'f-ethere' },
+  { id: 'quintessence', name: 'Quintessence', mult: 38, color: '#e8a33d', frame: 'f-quintessence' },
+  { id: 'absolu', name: 'Absolu', mult: 95, color: '#f2eee2', frame: 'f-absolu' },
 ];
 
 export const purityIndex = (id: PurityId) => PURITIES.findIndex((p) => p.id === id);

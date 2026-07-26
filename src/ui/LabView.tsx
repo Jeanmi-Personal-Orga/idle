@@ -1,13 +1,9 @@
 import { PURITIES, SLOTS } from '../game/content';
 import { formatDuration, formatNum, startDistillation, upgradeLab } from '../game/engine';
-import {
-  distillCost,
-  distillDuration,
-  labUpgradeCost,
-  purityWeights,
-} from '../game/formulas';
-import { store, useGame } from '../game/store';
+import { distillCost, distillDuration, labUpgradeCost, purityWeights } from '../game/formulas';
 import { mods as allMods } from '../game/modifiers';
+import { store, useGame } from '../game/store';
+import { Cauldron } from './Cauldron';
 import { PurityLegend } from './ItemCard';
 
 export function LabView() {
@@ -21,13 +17,18 @@ export function LabView() {
 
   return (
     <div className="view">
-      <div className="card">
+      {/* La pièce, pas un chiffre : elle se remplit à mesure qu'elle grandit. */}
+      <div className="card scene">
+        <Cauldron state={state} mods={mods} />
         <div className="row between">
           <div>
             <div className="label">Laboratoire · niveau {state.labLevel}</div>
             <div className="muted small">
-              Distillation en {formatDuration(distillDuration(state.labLevel, mods))} ·
-              socle +{Math.round((state.labLevel - 1) * 5)} %
+              {d
+                ? `${SLOTS.find((s) => s.id === d.slot)!.name} · ${formatDuration(d.remaining)} restant`
+                : state.resources.reagent >= cost
+                  ? `Distillation en ${formatDuration(distillDuration(state.labLevel, mods))}`
+                  : 'Foyer éteint — il manque des réactifs'}
             </div>
           </div>
           <button
@@ -43,37 +44,9 @@ export function LabView() {
             </span>
           </button>
         </div>
-        <div className="purity-bar">
-          {PURITIES.map((p, i) => {
-            const share = (weights[i] / totalWeight) * 100;
-            if (share < 0.4) return null;
-            return (
-              <div
-                key={p.id}
-                className="purity-seg"
-                style={{ width: `${share}%`, background: p.color }}
-                title={`${p.name} ${share.toFixed(0)} %`}
-              />
-            );
-          })}
-        </div>
-        <PurityLegend />
       </div>
 
-      {d ? (
-        <div className="card">
-          <div className="label">Distillation en cours</div>
-          <div className="bar tall">
-            <div
-              className="fill brew"
-              style={{ width: `${(1 - d.remaining / d.total) * 100}%` }}
-            />
-          </div>
-          <div className="muted small">
-            {SLOTS.find((s) => s.id === d.slot)!.name} · {formatDuration(d.remaining)} restant
-          </div>
-        </div>
-      ) : (
+      {!d && (
         <div className="card">
           <div className="label">Distiller — {cost} réactifs</div>
           <div className="muted small">
@@ -94,6 +67,25 @@ export function LabView() {
           </div>
         </div>
       )}
+
+      <div className="card">
+        <div className="label">Pureté attendue</div>
+        <div className="purity-bar">
+          {PURITIES.map((p, i) => {
+            const share = (weights[i] / totalWeight) * 100;
+            if (share < 0.4) return null;
+            return (
+              <div
+                key={p.id}
+                className="purity-seg"
+                style={{ width: `${share}%`, background: p.color }}
+                title={`${p.name} ${share.toFixed(0)} %`}
+              />
+            );
+          })}
+        </div>
+        <PurityLegend />
+      </div>
     </div>
   );
 }

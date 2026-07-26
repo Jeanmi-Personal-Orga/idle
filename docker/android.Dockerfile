@@ -8,7 +8,8 @@
 # construction est longue : le SDK et les dépendances Gradle se téléchargent.
 # Les couches sont ordonnées pour que seules les dernières se rejouent ensuite.
 
-FROM node:22-bookworm AS android
+# Debian trixie : bookworm s'arrête à JDK 17, insuffisant pour Capacitor 8.
+FROM node:22-trixie AS android
 
 ENV ANDROID_SDK_ROOT=/opt/android-sdk \
     JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \

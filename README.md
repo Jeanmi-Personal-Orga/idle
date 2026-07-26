@@ -55,6 +55,38 @@ pousser un district de plus plutôt que de dissoudre tôt.
 cycles de plus en plus hostiles (« Les Quais Bas · Cycle II »). Sans cela le
 prestige plafonnerait à la fin du contenu et n'aurait plus rien à mordre.
 
+## Direction artistique
+
+`direction-artistique.md` est la référence. Ce qui est appliqué dans le front :
+
+| Règle du document | État |
+| --- | --- |
+| Palette (brume, pierre noyée, cuir, verre) et **seuls les liquides saturés** | ✅ variables CSS |
+| Brume : un canvas unique en surcouche, 15 %, coupé quand l'onglet perd le focus | ✅ `src/ui/Fog.tsx` |
+| Scène de combat de profil, 3 couches, ennemi qui sort de la brume | ✅ |
+| Lanterne qui s'éteint à la mort → la scène s'assombrit | ✅ |
+| Chiffres de dégâts : montée + fondu, critiques 1,4× et en jaune | ✅ `CombatEvent` → `store.hits` |
+| Cycles supérieurs : même silhouette, teinte violette + contour | ✅ filtre CSS |
+| Chaudron-alambic : **le niveau de la fiole EST la barre de progression** | ✅ `src/ui/Cauldron.tsx` |
+| Foyer éteint quand les réactifs manquent, vapeur colorée par le palier probable | ✅ |
+| La pièce grandit par paliers de niveau (étagères, alambics, chat, tuyauterie) | ✅ 11 / 26 / 51 / 100 |
+| Paliers de pureté : couleur **et** cadre (reflet, halo, particules, brume) | ✅ |
+| Encoches d'affinage sur le cadre, une par 5 niveaux | ✅ |
+| Recherche gravée sur papier huilé, nœuds acquis en ambre | ✅ |
+| Dissolution : écran sombre, éclats qui montent, **mur des six legs** | ✅ `src/ui/LegacyWall.tsx` |
+| Sprites pixel art 64×64 en atlas PNG, 7 animations du héros, 24 ennemis | ⬜ à produire |
+
+Les sprites pixel art ne sont pas produits : je ne peux pas les dessiner. À la
+place, `src/ui/Sprites.tsx` pose des silhouettes SVG qui respectent les règles de
+lecture (forme avant détail, contour clair pour tenir en niveaux de gris) et qui
+exposent déjà les mêmes états (`idle`, `throw`, `hurt`, `death`) qu'une
+spritesheet remplacera sans toucher aux vues.
+
+Deux détails d'implémentation qui évitent des régressions : le miroir de l'ennemi
+est appliqué **dans** le SVG et sa taille de gardien passe par `width`, pour
+qu'aucune animation CSS de `transform` ne les écrase. Toutes les animations sont
+désactivées sous `prefers-reduced-motion`.
+
 ## Systèmes en place
 
 | Système | État |
@@ -96,7 +128,8 @@ Trois Dockerfiles séparés dans `docker/`, orchestrés par `compose.yaml` :
 
 L'image web fait 48 Mo (nginx + bundle) : le jeu tourne entièrement côté navigateur,
 il n'y a aucun serveur applicatif à faire tourner. L'image Android fait ~4 Go
-(JDK 21 + SDK Android 36) et sa première construction est longue.
+(JDK 21 + SDK Android 36) et sa première construction prend une dizaine de
+minutes ; elle sort un APK debug signé de 4,2 Mo, vérifié.
 
 **iOS : la compilation ne peut pas se faire dans Docker.** Xcode n'existe que sur
 macOS et sa licence interdit de l'exécuter ailleurs — il n'y a pas de
@@ -130,6 +163,10 @@ src/game/
   ascension.ts  Dissolution : éclats, legs permanents, modificateurs définitifs
   modifiers.ts  mods(state) : point d'entrée unique des formules (recherche × legs)
 src/ui/         Vues Brume / Laboratoire / Élixirs / Recherche / Dissolution
+  Fog.tsx       La brume : canvas unique en surcouche
+  Sprites.tsx   Silhouettes du héros et des ennemis (SVG, en attente du pixel art)
+  Cauldron.tsx  Le laboratoire en coupe : le chaudron raconte l'état du jeu
+  LegacyWall.tsx  Les six legs accrochés au mur, illuminés à l'achat
 ```
 
 `engine.ts` et `formulas.ts` ne touchent ni au DOM ni à React : l'équilibrage se

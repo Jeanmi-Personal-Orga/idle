@@ -77,12 +77,31 @@ function pushLog(state: GameState, msg: string) {
 }
 
 /**
+ * Événements de combat consommés par l'interface (chiffres de dégâts, secousses).
+ * Ils ne sont jamais sauvegardés : purement visuels, et la simulation
+ * d'équilibrage tourne sans écouteur.
+ */
+export type CombatEvent =
+  | { type: 'hit'; damage: number; crit: boolean }
+  | { type: 'taken'; damage: number }
+  | { type: 'kill' };
+
+export type EventSink = (event: CombatEvent) => void;
+
+const NO_SINK: EventSink = () => {};
+
+/**
  * Avance la simulation de `dt` secondes. Mute `state` en place — l'appelant
  * (le store) se charge de notifier l'interface.
  */
-export function step(state: GameState, dt: number, rng: () => number = Math.random) {
+export function step(
+  state: GameState,
+  dt: number,
+  rng: () => number = Math.random,
+  sink: EventSink = NO_SINK,
+) {
   advanceDistillation(state, dt);
-  advanceCombat(state, dt, rng);
+  advanceCombat(state, dt, rng, sink);
 }
 
 function advanceDistillation(state: GameState, dt: number) {
@@ -91,7 +110,7 @@ function advanceDistillation(state: GameState, dt: number) {
   d.remaining = Math.max(0, d.remaining - dt);
 }
 
-function advanceCombat(state: GameState, dt: number, rng: () => number) {
+function advanceCombat(state: GameState, dt: number, rng: () => number, sink: EventSink) {
   const c = state.combat;
   const s = heroStats(state);
 
@@ -120,11 +139,13 @@ function advanceCombat(state: GameState, dt: number, rng: () => number) {
       const crit = rng() < critChance(s);
       const dmg = s.power * (crit ? 1 + s.rupture / 100 : 1);
       c.enemy.hp -= dmg;
+      sink({ type: 'hit', damage: dmg, crit });
       if (s.osmosis > 0) {
         c.hero.hp = Math.min(s.health, c.hero.hp + (dmg * s.osmosis) / 100);
       }
     }
     if (c.enemy.hp <= 0) {
+      sink({ type: 'kill' });
       onWaveCleared(state, rng);
       return;
     }
@@ -135,6 +156,7 @@ function advanceCombat(state: GameState, dt: number, rng: () => number) {
   while (c.enemy.cooldown <= 0) {
     c.enemy.cooldown += c.enemy.interval;
     c.hero.hp -= c.enemy.damage;
+    sink({ type: 'taken', damage: c.enemy.damage });
     if (c.hero.hp <= 0) {
       c.hero.hp = 0;
       c.reviving = 3;

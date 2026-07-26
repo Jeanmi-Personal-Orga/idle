@@ -29,12 +29,13 @@ export function TechView() {
 
   return (
     <div className="view">
-      <div className="card">
+      <div className="card tech-paper">
         <div className="row between">
           <div>
             <div className="label">Recherche</div>
             <div className="muted small">
-              ◇ {formatNum(state.resources.insight)} lucidité ·{' '}
+              <span className="res-insight">◇ {formatNum(state.resources.insight)}</span>{' '}
+              lucidité ·{' '}
               {affordable > 0 ? `${affordable} nœud(s) à portée` : 'rien à portée'}
             </div>
           </div>
@@ -88,7 +89,10 @@ function NodeCard({ node, color }: { node: TechNode; color: string }) {
   }
 
   return (
-    <div className="card node" style={{ borderColor: maxed ? color + '88' : undefined }}>
+    <div
+      className={`card node tech-paper ${level > 0 ? 'owned' : ''} ${node.requires ? 'linked' : ''}`}
+      style={maxed ? { borderColor: color + '88' } : undefined}
+    >
       <div className="row between">
         <div>
           <b style={maxed ? { color } : undefined}>{node.name}</b>

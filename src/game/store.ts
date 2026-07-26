@@ -1,16 +1,43 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { SAVE_VERSION, applyOffline, collectDistillation, newGame, step } from './engine';
+import {
+  SAVE_VERSION,
+  applyOffline,
+  collectDistillation,
+  newGame,
+  step,
+  type CombatEvent,
+} from './engine';
 import type { GameState } from './types';
 
 const KEY = 'brume.save.v1';
 /** Pas de simulation fixe : rend le combat déterministe quel que soit le framerate. */
 const TICK = 1 / 10;
 
+/** Un coup affiché à l'écran, purement visuel, jamais sauvegardé. */
+export interface FloatingHit {
+  id: number;
+  damage: number;
+  crit: boolean;
+  /** Horodatage de naissance (performance.now), pour le fondu. */
+  born: number;
+  /** Décalages aléatoires pour éviter que deux chiffres se superposent. */
+  dx: number;
+  dy: number;
+}
+
+/** Durée de vie d'un chiffre de dégâts, en millisecondes (§3 : montée + fondu). */
+const HIT_TTL = 700;
+
 class GameStore {
   state: GameState;
+  /** Coups récents pour l'affichage ; vidés au fil du temps.  */
+  hits: FloatingHit[] = [];
+  /** Incrémenté à chaque coup encaissé : déclenche la secousse de l'écran. */
+  shake = 0;
   private listeners = new Set<() => void>();
   private revision = 0;
   private accumulator = 0;
+  private hitId = 0;
   private raf = 0;
   private lastFrame = 0;
 
@@ -45,9 +72,16 @@ class GameStore {
       this.lastFrame = now;
       this.accumulator += dt;
       let steps = 0;
+      // Les chiffres de dégâts ne servent à rien quand l'onglet est masqué :
+      // on ne les collecte que si quelqu'un peut les voir.
+      const sink = document.hidden ? undefined : (e: CombatEvent) => this.onCombatEvent(e);
       while (this.accumulator >= TICK && steps++ < 60) {
         this.accumulator -= TICK;
-        step(this.state, TICK);
+        step(this.state, TICK, Math.random, sink);
+      }
+      if (this.hits.length) {
+        const cutoff = now - HIT_TTL;
+        this.hits = this.hits.filter((h) => h.born > cutoff);
       }
       // La récolte est automatique : l'attente est le coût, pas le clic.
       if (this.state.distilling && this.state.distilling.remaining <= 0) {
@@ -67,6 +101,23 @@ class GameStore {
         this.notify();
       }
     });
+  }
+
+  private onCombatEvent(event: CombatEvent) {
+    if (event.type === 'hit') {
+      this.hits.push({
+        id: ++this.hitId,
+        damage: event.damage,
+        crit: event.crit,
+        born: performance.now(),
+        dx: Math.random() * 40 - 20,
+        dy: Math.random() * 12,
+      });
+      // Garde-fou : à très haute vitesse d'attaque, on ne garde que les derniers.
+      if (this.hits.length > 12) this.hits.splice(0, this.hits.length - 12);
+    } else if (event.type === 'taken') {
+      this.shake++;
+    }
   }
 
   save() {
