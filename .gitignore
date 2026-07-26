@@ -26,3 +26,6 @@ dist-ssr
 # Capacitor
 ios/
 android/
+
+# Artefacts de build Docker
+out/

@@ -1,0 +1,11 @@
+node_modules
+dist
+ios
+android
+.git
+.gitignore
+*.md
+Dockerfile
+.dockerignore
+compose.yaml
+out/

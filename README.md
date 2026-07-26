@@ -83,7 +83,29 @@ npm run build    # typecheck + bundle dans dist/
 npm run lint
 ```
 
-### Mobile (Capacitor)
+### Docker — une image par cible
+
+Trois Dockerfiles séparés dans `docker/`, orchestrés par `compose.yaml` :
+
+| Cible | Commande | Résultat |
+| --- | --- | --- |
+| **Web (production)** | `docker compose up web` | nginx sur http://localhost:8080 |
+| **Web (dev)** | `docker compose --profile dev up dev` | vite + rechargement à chaud sur http://localhost:5173, exposé au réseau local |
+| **Android** | `docker build -f docker/android.Dockerfile --target apk --output type=local,dest=./out .` | `out/app-debug.apk` |
+| **iOS** | `docker build -f docker/ios.Dockerfile --target project --output type=local,dest=./out .` | `out/ios/` à ouvrir dans Xcode |
+
+L'image web fait 48 Mo (nginx + bundle) : le jeu tourne entièrement côté navigateur,
+il n'y a aucun serveur applicatif à faire tourner. L'image Android fait ~4 Go
+(JDK 21 + SDK Android 36) et sa première construction est longue.
+
+**iOS : la compilation ne peut pas se faire dans Docker.** Xcode n'existe que sur
+macOS et sa licence interdit de l'exécuter ailleurs — il n'y a pas de
+contournement. L'image iOS fait donc tout ce qui est faisable sans Mac : bundle
+web + projet Capacitor complet, à copier sur un Mac puis ouvrir avec
+`open ios/App/App.xcodeproj`. Capacitor 8 passant par Swift Package Manager,
+aucun `pod install` n'est nécessaire.
+
+### Mobile en local (Capacitor, sans Docker)
 
 ```bash
 npm run mobile:add:android   # crée le projet Android (Android Studio requis)
