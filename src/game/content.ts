@@ -80,3 +80,20 @@ export const DISTRICTS: { name: string; enemies: string[] }[] = [
 ];
 
 export const WAVES_PER_DISTRICT = 20;
+
+/**
+ * La profondeur est illimitée : passé le dernier district, la ville se rejoue en
+ * cycles de plus en plus hostiles (« Les Quais Bas · Cycle II »). Sans cela, la
+ * dissolution plafonnerait dès la fin du contenu et n'aurait plus rien à mordre.
+ */
+export const districtAt = (depth: number) => DISTRICTS[depth % DISTRICTS.length];
+export const cycleOf = (depth: number) => Math.floor(depth / DISTRICTS.length);
+
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+
+export function districtLabel(depth: number): string {
+  const cycle = cycleOf(depth);
+  const name = districtAt(depth).name;
+  if (cycle === 0) return name;
+  return `${name} · Cycle ${ROMAN[cycle] ?? cycle + 1}`;
+}

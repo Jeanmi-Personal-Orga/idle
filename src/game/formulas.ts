@@ -1,5 +1,6 @@
-import { DISTRICTS, PURITIES, WAVES_PER_DISTRICT, purityIndex, slotDef } from './content';
-import { NEUTRAL_MODS, techMods, type TechMods } from './tech';
+import { PURITIES, WAVES_PER_DISTRICT, districtAt, purityIndex, slotDef } from './content';
+import { mods as allMods } from './modifiers';
+import { NEUTRAL_MODS, type TechMods } from './tech';
 import type { GameState, Item, PurityId, SlotId, StatKey, Stats } from './types';
 
 /** Intervalle de frappe de base, en secondes, avant Volatilité. */
@@ -40,7 +41,7 @@ export function itemStats(item: Item): Stats {
 
 /** Stats totales du héros : socle + équipement + laboratoire + recherche. */
 export function heroStats(state: GameState): Required<Stats> {
-  const mods = techMods(state);
+  const mods = allMods(state);
   const total: Required<Stats> = {
     power: 5,
     health: 100,
@@ -84,12 +85,13 @@ export function dps(s: Required<Stats>): number {
 // --- Ennemis ---------------------------------------------------------------
 
 export function enemyName(district: number, wave: number): string {
-  const d = DISTRICTS[Math.min(district, DISTRICTS.length - 1)];
+  const d = districtAt(district);
   if (wave === WAVES_PER_DISTRICT) return `${d.enemies[2]} (gardien)`;
   return d.enemies[wave % 2];
 }
 
-/** Progression de difficulté : douce dans un district, saut net entre districts. */
+/** Progression de difficulté : douce dans un district, saut net entre districts.
+ * `district` est la profondeur absolue, sans plafond (voir districtAt). */
 export function enemyHp(district: number, wave: number): number {
   const districtMult = Math.pow(9, district);
   const boss = wave === WAVES_PER_DISTRICT ? 4 : 1;

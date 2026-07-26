@@ -260,6 +260,7 @@ export interface TechMods {
   enemyDamageMult: number;
   offlineCapHours: number;
   offlineEfficiency: number;
+  insightMult: number;
 }
 
 export const NEUTRAL_MODS: TechMods = {
@@ -275,6 +276,7 @@ export const NEUTRAL_MODS: TechMods = {
   enemyDamageMult: 1,
   offlineCapHours: 8,
   offlineEfficiency: 0.6,
+  insightMult: 1,
 };
 
 export function techMods(state: GameState): TechMods {
@@ -299,6 +301,7 @@ export function techMods(state: GameState): TechMods {
     enemyDamageMult: wardMult(l('ward')),
     offlineCapHours: 8 + l('offline'),
     offlineEfficiency: 0.6 + 0.03 * l('offline'),
+    insightMult: 1,
   };
 }
 

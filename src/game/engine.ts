@@ -1,4 +1,4 @@
-import { DISTRICTS, WAVES_PER_DISTRICT, purityIndex, slotDef } from './content';
+import { WAVES_PER_DISTRICT, districtLabel, purityIndex, slotDef } from './content';
 import {
   attackInterval,
   chainChance,
@@ -17,10 +17,12 @@ import {
   upgradeCost,
   waveReward,
 } from './formulas';
-import { insightReward, techMods } from './tech';
+import { ascMods, hasUnlockedAscension, shardGain } from './ascension';
+import { mods as allMods } from './modifiers';
+import { insightReward } from './tech';
 import type { GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 let idCounter = 0;
 const nextId = () => `i${Date.now().toString(36)}${(idCounter++).toString(36)}`;
@@ -47,6 +49,7 @@ export function newGame(): GameState {
     resources: { essence: 0, reagent: 6, insight: 0, shard: 0 },
     labLevel: 1,
     tech: {},
+    ascension: { count: 0, legacies: {}, deepest: 0 },
     equipped: {},
     stash: [],
     distilling: null,
@@ -99,7 +102,7 @@ function advanceCombat(state: GameState, dt: number, rng: () => number) {
     if (c.reviving <= 0) {
       c.hero.hp = s.health;
       c.wave = 1;
-      c.enemy = makeEnemy(c.district, c.wave, techMods(state).enemyDamageMult);
+      c.enemy = makeEnemy(c.district, c.wave, allMods(state).enemyDamageMult);
     }
     return;
   }
@@ -143,26 +146,26 @@ function advanceCombat(state: GameState, dt: number, rng: () => number) {
 
 function onWaveCleared(state: GameState, rng: () => number) {
   const c = state.combat;
-  const mods = techMods(state);
+  const mods = allMods(state);
   const r = waveReward(c.district, c.wave);
   const guardian = c.wave >= WAVES_PER_DISTRICT;
   state.resources.essence += r.essence * mods.essenceMult;
   if (rng() < r.reagentChance) {
     state.resources.reagent += Math.ceil(r.reagent * mods.reagentMult);
   }
-  state.resources.insight += insightReward(c.district, guardian, c.wave > c.best);
+  state.resources.insight += Math.floor(
+    insightReward(c.district, guardian, c.wave > c.best) * mods.insightMult,
+  );
 
   c.best = Math.max(c.best, c.wave);
+  state.ascension.deepest = Math.max(state.ascension.deepest, c.district);
 
   if (c.wave >= WAVES_PER_DISTRICT) {
-    if (c.district < DISTRICTS.length - 1) {
-      c.district += 1;
-      c.wave = 1;
-      c.best = 1;
-      pushLog(state, `Le gardien tombe. Tu descends vers ${DISTRICTS[c.district].name}.`);
-    } else {
-      pushLog(state, 'Le Distillateur tombe à nouveau. La brume ne recule plus.');
-    }
+    // La profondeur n'a pas de fin : la ville se rejoue en cycles plus hostiles.
+    c.district += 1;
+    c.wave = 1;
+    c.best = 1;
+    pushLog(state, `Le gardien tombe. Tu descends vers ${districtLabel(c.district)}.`);
   } else {
     c.wave += 1;
   }
@@ -172,7 +175,7 @@ function onWaveCleared(state: GameState, rng: () => number) {
 
 /** Crédite une partie des gains accumulés hors-ligne. */
 export function applyOffline(state: GameState, now = Date.now()): number {
-  const mods = techMods(state);
+  const mods = allMods(state);
   const seconds = Math.min(
     mods.offlineCapHours * 3600,
     Math.max(0, (now - state.lastSeen) / 1000),
@@ -210,7 +213,7 @@ export function startDistillation(state: GameState, slot: SlotId): boolean {
   const cost = distillCost(state.labLevel);
   if (state.resources.reagent < cost) return false;
   state.resources.reagent -= cost;
-  const total = distillDuration(state.labLevel, techMods(state));
+  const total = distillDuration(state.labLevel, allMods(state));
   state.distilling = { slot, remaining: total, total };
   return true;
 }
@@ -218,7 +221,7 @@ export function startDistillation(state: GameState, slot: SlotId): boolean {
 export function collectDistillation(state: GameState, rng: () => number = Math.random): Item | null {
   const d = state.distilling;
   if (!d || d.remaining > 0) return null;
-  const item = makeItem(d.slot, state.labLevel, rng, nextId(), techMods(state));
+  const item = makeItem(d.slot, state.labLevel, rng, nextId(), allMods(state));
   state.distilling = null;
   const current = state.equipped[item.slot];
   // Auto-équipe si le slot est vide ou si l'objet est franchement meilleur.
@@ -245,7 +248,7 @@ export function equip(state: GameState, itemId: string) {
 export function upgrade(state: GameState, itemId: string): boolean {
   const item = findItem(state, itemId);
   if (!item) return false;
-  const cost = upgradeCost(item, techMods(state));
+  const cost = upgradeCost(item, allMods(state));
   if (state.resources.essence < cost) return false;
   state.resources.essence -= cost;
   item.level += 1;
@@ -264,6 +267,41 @@ export function dissolve(state: GameState, itemId: string): boolean {
 
 export function dissolveAll(state: GameState) {
   for (const item of [...state.stash]) dissolve(state, item.id);
+}
+
+/**
+ * Dissout le laboratoire : la matière repart de zéro, la connaissance reste.
+ * Retourne les Éclats gagnés, ou 0 si la dissolution n'était pas permise.
+ */
+export function ascend(state: GameState): number {
+  if (!hasUnlockedAscension(state)) return 0;
+  const gain = shardGain(state);
+  if (gain <= 0) return 0;
+
+  state.ascension.count += 1;
+  state.resources.shard += gain;
+
+  // Conservé : Lucidité, arbre de recherche, Éclats, legs, district le plus profond.
+  state.resources.essence = 0;
+  state.resources.reagent = 6;
+  state.labLevel = ascMods(state).startingLab;
+  state.equipped = { flacon: makeItem('flacon', state.labLevel, () => 0.5, nextId()) };
+  state.stash = [];
+  state.distilling = null;
+  state.combat = {
+    district: 0,
+    wave: 1,
+    best: 1,
+    hero: { hp: 1, cooldown: 0 },
+    enemy: makeEnemy(0, 1, allMods(state).enemyDamageMult),
+    reviving: 0,
+  };
+  state.combat.hero.hp = heroStats(state).health;
+  pushLog(
+    state,
+    `Dissolution n°${state.ascension.count} : ${gain} éclats. La brume se referme.`,
+  );
+  return gain;
 }
 
 export function upgradeLab(state: GameState): boolean {

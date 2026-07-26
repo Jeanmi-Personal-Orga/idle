@@ -1,4 +1,4 @@
-import { DISTRICTS, STATS, WAVES_PER_DISTRICT } from '../game/content';
+import { STATS, WAVES_PER_DISTRICT, districtLabel } from '../game/content';
 import { formatNum } from '../game/engine';
 import { attackInterval, dps, heroStats } from '../game/formulas';
 import { useGame } from '../game/store';
@@ -19,7 +19,7 @@ export function BrumeView() {
   const state = useGame();
   const c = state.combat;
   const s = heroStats(state);
-  const district = DISTRICTS[c.district];
+  const district = districtLabel(c.district);
   const heroPct = Math.max(0, (c.hero.hp / s.health) * 100);
   const enemyPct = Math.max(0, (c.enemy.hp / c.enemy.maxHp) * 100);
 
@@ -28,7 +28,7 @@ export function BrumeView() {
       <div className="card">
         <div className="row between">
           <div>
-            <div className="label">{district.name}</div>
+            <div className="label">{district}</div>
             <div className="muted small">
               Vague {c.wave} / {WAVES_PER_DISTRICT}
             </div>

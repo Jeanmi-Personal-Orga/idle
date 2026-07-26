@@ -16,6 +16,7 @@ Combat automatique → Essence + Réactifs + Lucidité → Distillation / Affina
 - **Réactifs** : lancent une distillation (tombent des ennemis, garantis sur les gardiens).
 - **Laboratoire** : accélère la distillation, décale la courbe de pureté vers le haut,
   et renforce le socle Puissance/Intégrité de 5 % par niveau.
+- **Éclats** : rendus par la dissolution, scellent les legs permanents.
 - **Lucidité** : alimente l'arbre de recherche. Elle ne tombe que sur une vague
   jamais atteinte dans le district et sur les gardiens — la recherche suit la
   progression, elle ne se farme pas en laissant tourner le jeu sur place.
@@ -34,6 +35,26 @@ Les coûts croissent de 26 à 45 % par niveau : monter plusieurs nœuds vaut mie
 que maximiser un seul, et l'arbre reste un puits à long terme (≈ deux tiers
 investi après 24 h de jeu simulé).
 
+## Dissolution (prestige)
+
+Débloquée en atteignant La Verrerie une fois. Dissoudre le laboratoire rend des
+**Éclats** et remet à zéro la matière ; la connaissance reste.
+
+| Repart de zéro | Reste acquis |
+| --- | --- |
+| essence, réactifs, élixirs, laboratoire, districts | Lucidité et arbre de recherche, éclats, legs, écho des dissolutions (+12 % par dissolution) |
+
+Les éclats scellent six **legs** permanents : essence récoltée, Puissance/Intégrité,
+réactifs, courbe de pureté, niveau de laboratoire au réveil (`Alambic hérité` — la
+relance devient très rapide), Lucidité gagnée.
+
+Le gain d'éclats double environ par district atteint : il est toujours payant de
+pousser un district de plus plutôt que de dissoudre tôt.
+
+**La profondeur est illimitée.** Passé Le Puits Prismatique, la ville se rejoue en
+cycles de plus en plus hostiles (« Les Quais Bas · Cycle II »). Sans cela le
+prestige plafonnerait à la fin du contenu et n'aurait plus rien à mordre.
+
 ## Systèmes en place
 
 | Système | État |
@@ -47,7 +68,8 @@ investi après 24 h de jeu simulé).
 | 6 districts × 20 vagues, gardien de fin de district | ✅ |
 | Sauvegarde locale + progression hors-ligne (8 h à 60 %, extensible par la recherche) | ✅ |
 | Arbre de recherche : 3 branches, 15 nœuds, prérequis, achat max | ✅ |
-| Ascension, compétences, familiers, montures | à venir |
+| Dissolution : éclats, 6 legs permanents, profondeur en cycles infinis | ✅ |
+| Compétences, familiers, montures | à venir |
 
 Les plafonds voulus sont respectés : Réaction en chaîne et Clairvoyance ne servent à
 rien au-delà de 100 %, comme dans le modèle d'origine.
@@ -82,8 +104,10 @@ src/game/
   formulas.ts   Toutes les courbes : coûts, scaling ennemi, génération d'objets
   engine.ts     Simulation pure : step(state, dt), actions, formatage
   store.ts      Boucle de jeu (pas fixe 10 Hz), sauvegarde, hooks React
-  tech.ts       Arbre de recherche : nœuds, coûts, agrégation des modificateurs
-src/ui/         Vues Brume / Laboratoire / Élixirs / Recherche
+  tech.ts       Arbre de recherche : nœuds, coûts, modificateurs temporaires
+  ascension.ts  Dissolution : éclats, legs permanents, modificateurs définitifs
+  modifiers.ts  mods(state) : point d'entrée unique des formules (recherche × legs)
+src/ui/         Vues Brume / Laboratoire / Élixirs / Recherche / Dissolution
 ```
 
 `engine.ts` et `formulas.ts` ne touchent ni au DOM ni à React : l'équilibrage se
@@ -101,6 +125,17 @@ hors navigateur) :
 | Les Citernes | ~5 h 30 |
 | L'Observatoire | ~8 h |
 | Le Puits Prismatique | ~15 h |
+
+Avec dissolutions (un joueur qui dissout après 30 min sans progrès) :
+
+| | |
+| --- | --- |
+| 1re dissolution | 1 h 54 (district 2, 6 éclats) |
+| 5e dissolution | 6 h (district 6, 142 éclats) |
+| après 72 h | ~48 dissolutions, frontière au district 9 (Cycle II), 1300 éclats par run |
+
+Chaque relance rejoue les premiers districts en quelques secondes puis pousse un
+ou deux districts plus loin — la courbe de prestige attendue.
 
 Composition atteinte à 24 h : Volatilité 260 %, Réaction en chaîne 100 % (plafond),
 Clairvoyance 54 %, Rupture 306 %, Osmose 110 % — l'ordre de grandeur visé.

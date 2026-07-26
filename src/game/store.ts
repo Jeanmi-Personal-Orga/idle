@@ -106,6 +106,12 @@ function migrate(save: GameState): GameState | null {
     save.tech = {};
     save.version = 2;
   }
+  if (save.version === 2) {
+    // v3 : dissolution (prestige) et ses legs permanents.
+    save.resources.shard = 0;
+    save.ascension = { count: 0, legacies: {}, deepest: save.combat.district };
+    save.version = 3;
+  }
   return save.version === SAVE_VERSION ? save : null;
 }
 

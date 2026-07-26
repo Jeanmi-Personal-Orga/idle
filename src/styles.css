@@ -68,8 +68,17 @@ header {
   color: #c2a3e8;
 }
 
-.resources span:last-child {
+.resources span:nth-child(3) {
   color: #9fd0ff;
+}
+
+.resources span:nth-child(4) {
+  color: #e8e4d0;
+}
+
+.resources {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .branch-tabs {
@@ -323,7 +332,7 @@ button.slot-btn {
 
 nav {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   border-top: 1px solid var(--line);
   background: #0d151d;
   padding-bottom: var(--safe-bottom);
@@ -360,6 +369,23 @@ nav .icon {
   font-weight: 700;
   border-radius: 99px;
   padding: 0 5px;
+}
+
+.badge.shard {
+  padding: 0;
+  width: 7px;
+  height: 7px;
+  background: #e8e4d0;
+}
+
+button.ascend {
+  background: linear-gradient(180deg, #2b2a24, #1d2028);
+  border-color: #e8e4d055;
+  color: #e8e4d0;
+}
+
+nav button {
+  font-size: 11px;
 }
 
 .badge.dot {

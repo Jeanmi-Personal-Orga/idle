@@ -51,6 +51,15 @@ export interface Resources {
   shard: number;
 }
 
+export interface Ascension {
+  /** Nombre de dissolutions effectuées. */
+  count: number;
+  /** Niveau atteint par legs permanent (voir ascension.ts). */
+  legacies: Record<string, number>;
+  /** District le plus profond jamais atteint, toutes dissolutions confondues. */
+  deepest: number;
+}
+
 export interface Hero {
   hp: number;
   /** Temps restant avant la prochaine frappe, en secondes. */
@@ -83,6 +92,7 @@ export interface GameState {
   labLevel: number;
   /** Niveau atteint par nœud de l'arbre de recherche (voir tech.ts). */
   tech: Record<string, number>;
+  ascension: Ascension;
   equipped: Partial<Record<SlotId, Item>>;
   stash: Item[];
   distilling: Distillation | null;
