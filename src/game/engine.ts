@@ -100,14 +100,18 @@ export function step(
   rng: () => number = Math.random,
   sink: EventSink = NO_SINK,
 ) {
-  advanceDistillation(state, dt);
+  advanceDistillation(state, dt, rng);
   advanceCombat(state, dt, rng, sink);
 }
 
-function advanceDistillation(state: GameState, dt: number) {
+function advanceDistillation(state: GameState, dt: number, rng: () => number) {
   const d = state.distilling;
   if (!d) return;
   d.remaining = Math.max(0, d.remaining - dt);
+  // Terminer une distillation est une règle du jeu, pas un effet de rendu : si la
+  // récolte dépendait de la boucle d'animation, un onglet en arrière-plan
+  // laisserait la fiole pleine et le chaudron bloqué.
+  if (d.remaining <= 0) collectDistillation(state, rng);
 }
 
 function advanceCombat(state: GameState, dt: number, rng: () => number, sink: EventSink) {
@@ -207,6 +211,7 @@ export function applyOffline(state: GameState, now = Date.now()): number {
 
   if (state.distilling) {
     state.distilling.remaining = Math.max(0, state.distilling.remaining - seconds);
+    if (state.distilling.remaining <= 0) collectDistillation(state);
   }
 
   // On estime le rythme de nettoyage à la vague courante, à efficacité réduite.

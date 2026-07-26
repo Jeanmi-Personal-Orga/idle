@@ -1,24 +1,32 @@
-import { PURITIES, SLOTS, slotDef } from '../game/content';
-import { formatDuration, formatNum, startDistillation, upgradeLab } from '../game/engine';
+import { PURITIES, SLOTS, slotDef } from "../game/content";
+import {
+  collectDistillation,
+  formatDuration,
+  formatNum,
+  startDistillation,
+  upgradeLab,
+} from "../game/engine";
 import {
   distillCost,
   distillDuration,
   itemScore,
   labUpgradeCost,
   purityWeights,
-} from '../game/formulas';
-import { mods as allMods } from '../game/modifiers';
-import { store, useGame } from '../game/store';
-import type { GameState, SlotId } from '../game/types';
-import { Cauldron } from './Cauldron';
-import { PurityLegend } from './ItemCard';
+} from "../game/formulas";
+import { mods as allMods } from "../game/modifiers";
+import { store, useGame } from "../game/store";
+import type { GameState, SlotId } from "../game/types";
+import { Cauldron } from "./Cauldron";
+import { PurityLegend } from "./ItemCard";
 
 /** Emplacement le plus faible : vide d'abord, sinon le moins bon score. */
 function weakestSlot(state: GameState): SlotId {
   const empty = SLOTS.find((s) => !state.equipped[s.id]);
   if (empty) return empty.id;
   return SLOTS.reduce((worst, s) =>
-    itemScore(state.equipped[s.id]!) < itemScore(state.equipped[worst.id]!) ? s : worst,
+    itemScore(state.equipped[s.id]!) < itemScore(state.equipped[worst.id]!)
+      ? s
+      : worst,
   ).id;
 }
 
@@ -30,6 +38,8 @@ export function LabView() {
   const weights = purityWeights(state.labLevel, mods);
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   const d = state.distilling;
+  /** Fiole pleine d'une sauvegarde antérieure au ramassage automatique. */
+  const finished = !!d && d.remaining <= 0;
   const ready = !d && state.resources.reagent >= cost;
   // Le chaudron est un bouton : il relance la pièce qui manque le plus, pour
   // qu'un joueur puisse jouer sans jamais lire la liste des emplacements.
@@ -42,17 +52,29 @@ export function LabView() {
         <Cauldron
           state={state}
           mods={mods}
-          onClick={ready ? () => store.act((s) => startDistillation(s, suggested)) : undefined}
+          // Le chaudron ne doit jamais être un cul-de-sac : s'il reste une fiole
+          // pleine, le toucher la ramasse au lieu de ne rien faire.
+          onClick={
+            finished
+              ? () => store.act((s) => collectDistillation(s))
+              : ready
+                ? () => store.act((s) => startDistillation(s, suggested))
+                : undefined
+          }
         />
         <div className="row between">
           <div>
             <div className="label">Laboratoire · niveau {state.labLevel}</div>
             <div className="muted small">
-              {d
-                ? `${SLOTS.find((s) => s.id === d.slot)!.name} · ${formatDuration(d.remaining)} restant`
-                : ready
-                  ? `Touche le chaudron pour distiller un ${slotDef(suggested).name.toLowerCase()} — ${formatDuration(distillDuration(state.labLevel, mods))}`
-                  : 'Foyer éteint — il manque des réactifs'}
+              {finished
+                ? "Fiole pleine — touche le chaudron pour la ramasser"
+                : d
+                  ? `${SLOTS.find((s) => s.id === d.slot)!.name} · ${formatDuration(d.remaining)} restant`
+                  : ready
+                    ? `Touche le chaudron pour distiller ${slotDef(suggested).article} ${slotDef(
+                        suggested,
+                      ).name.toLowerCase()} — ${formatDuration(distillDuration(state.labLevel, mods))}`
+                    : "Foyer éteint — il manque des réactifs"}
             </div>
           </div>
           <button
