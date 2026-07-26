@@ -131,6 +131,11 @@ il n'y a aucun serveur applicatif à faire tourner. L'image Android fait ~4 Go
 (JDK 21 + SDK Android 36) et sa première construction prend une dizaine de
 minutes ; elle sort un APK debug signé de 4,2 Mo, vérifié.
 
+Le conteneur `dev` et un `npm run dev` lancé sur la machine se disputent le port
+5173 : `failed to bind host port [::]:5173/tcp: address already in use`. Coupe
+l'un des deux (`pkill -f vite`), ou change le port hôte dans `compose.yaml`
+(`'5174:5173'`). Même remarque entre l'image `web` et un autre service sur 8080.
+
 **iOS : la compilation ne peut pas se faire dans Docker.** Xcode n'existe que sur
 macOS et sa licence interdit de l'exécuter ailleurs — il n'y a pas de
 contournement. L'image iOS fait donc tout ce qui est faisable sans Mac : bundle
