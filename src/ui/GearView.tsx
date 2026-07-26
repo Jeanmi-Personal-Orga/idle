@@ -2,10 +2,12 @@ import { SLOTS } from '../game/content';
 import { dissolve, dissolveAll, equip, formatNum, upgrade } from '../game/engine';
 import { itemScore, upgradeCost } from '../game/formulas';
 import { store, useGame } from '../game/store';
+import { techMods } from '../game/tech';
 import { ItemCard } from './ItemCard';
 
 export function GearView() {
   const state = useGame();
+  const mods = techMods(state);
   const stash = [...state.stash].sort((a, b) => itemScore(b) - itemScore(a));
 
   return (
@@ -23,7 +25,7 @@ export function GearView() {
                 </div>
               );
             }
-            const cost = upgradeCost(item);
+            const cost = upgradeCost(item, mods);
             return (
               <ItemCard
                 key={slot.id}

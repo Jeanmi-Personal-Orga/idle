@@ -45,6 +45,8 @@ export interface Distillation {
 export interface Resources {
   essence: number;
   reagent: number;
+  /** Monnaie de recherche, dépensée dans l'arbre. */
+  insight: number;
   /** Monnaie de méta-progression (ascension). */
   shard: number;
 }
@@ -79,6 +81,8 @@ export interface GameState {
   version: number;
   resources: Resources;
   labLevel: number;
+  /** Niveau atteint par nœud de l'arbre de recherche (voir tech.ts). */
+  tech: Record<string, number>;
   equipped: Partial<Record<SlotId, Item>>;
   stash: Item[];
   distilling: Distillation | null;

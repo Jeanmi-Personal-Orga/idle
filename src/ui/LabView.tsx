@@ -7,13 +7,15 @@ import {
   purityWeights,
 } from '../game/formulas';
 import { store, useGame } from '../game/store';
+import { techMods } from '../game/tech';
 import { PurityLegend } from './ItemCard';
 
 export function LabView() {
   const state = useGame();
   const cost = distillCost(state.labLevel);
   const labCost = labUpgradeCost(state.labLevel);
-  const weights = purityWeights(state.labLevel);
+  const mods = techMods(state);
+  const weights = purityWeights(state.labLevel, mods);
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   const d = state.distilling;
 
@@ -24,7 +26,7 @@ export function LabView() {
           <div>
             <div className="label">Laboratoire · niveau {state.labLevel}</div>
             <div className="muted small">
-              Distillation en {formatDuration(distillDuration(state.labLevel))} ·
+              Distillation en {formatDuration(distillDuration(state.labLevel, mods))} ·
               socle +{Math.round((state.labLevel - 1) * 5)} %
             </div>
           </div>

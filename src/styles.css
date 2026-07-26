@@ -64,8 +64,29 @@ header {
   color: var(--accent);
 }
 
-.resources span:last-child {
+.resources span:nth-child(2) {
   color: #c2a3e8;
+}
+
+.resources span:last-child {
+  color: #9fd0ff;
+}
+
+.branch-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.branch-tabs button {
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 4px;
+  font-size: 13px;
+}
+
+.card.node .bar {
+  height: 5px;
 }
 
 main {
@@ -302,7 +323,7 @@ button.slot-btn {
 
 nav {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--line);
   background: #0d151d;
   padding-bottom: var(--safe-bottom);
@@ -346,4 +367,8 @@ nav .icon {
   width: 7px;
   height: 7px;
   background: #c2a3e8;
+}
+
+.capped {
+  color: var(--accent);
 }

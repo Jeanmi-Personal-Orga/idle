@@ -63,15 +63,22 @@ export function BrumeView() {
       <div className="card">
         <div className="label">Composition</div>
         <div className="grid2">
-          {SHOWN.map((k) => (
-            <div key={k} className="statline">
-              <span className="muted">{STATS[k].name}</span>
-              <b>
-                {formatNum(s[k])}
-                {STATS[k].suffix}
-              </b>
-            </div>
-          ))}
+          {SHOWN.map((k) => {
+            // Réaction en chaîne et Clairvoyance plafonnent : on montre le surplus perdu.
+            const capped = (k === 'chain' || k === 'clairvoyance') && s[k] > 100;
+            return (
+              <div key={k} className="statline">
+                <span className="muted">{STATS[k].name}</span>
+                <b className={capped ? 'capped' : undefined}>
+                  {formatNum(capped ? 100 : s[k])}
+                  {STATS[k].suffix}
+                  {capped && (
+                    <span className="muted small"> +{formatNum(s[k] - 100)} perdu</span>
+                  )}
+                </b>
+              </div>
+            );
+          })}
         </div>
         <div className="muted small">
           Réaction en chaîne et Clairvoyance plafonnent à 100 %.

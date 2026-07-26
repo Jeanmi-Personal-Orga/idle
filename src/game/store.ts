@@ -89,12 +89,24 @@ function load(): GameState | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as GameState;
-    if (parsed.version !== SAVE_VERSION) return null;
-    return parsed;
+    return migrate(JSON.parse(raw) as GameState);
   } catch {
     return null;
   }
+}
+
+/**
+ * Fait remonter une sauvegarde ancienne à la version courante. Une sauvegarde
+ * qu'on ne sait pas convertir est abandonnée plutôt que chargée de travers.
+ */
+function migrate(save: GameState): GameState | null {
+  if (save.version === 1) {
+    // v2 : arbre de recherche et sa monnaie.
+    save.resources.insight = 0;
+    save.tech = {};
+    save.version = 2;
+  }
+  return save.version === SAVE_VERSION ? save : null;
 }
 
 export const store = new GameStore();

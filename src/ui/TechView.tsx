@@ -1,0 +1,135 @@
+import { useState } from 'react';
+import { formatNum } from '../game/engine';
+import { store, useGame } from '../game/store';
+import {
+  BRANCHES,
+  NODES,
+  isUnlocked,
+  nodeCost,
+  nodeDef,
+  nodeLevel,
+  nodesOf,
+  research,
+  researchMax,
+  totalInvested,
+  type BranchId,
+  type TechNode,
+} from '../game/tech';
+
+export function TechView() {
+  const state = useGame();
+  const [branch, setBranch] = useState<BranchId>('puissance');
+  const def = BRANCHES.find((b) => b.id === branch)!;
+  const affordable = NODES.filter(
+    (n) =>
+      isUnlocked(state, n) &&
+      nodeLevel(state, n.id) < n.max &&
+      state.resources.insight >= nodeCost(n, nodeLevel(state, n.id)),
+  ).length;
+
+  return (
+    <div className="view">
+      <div className="card">
+        <div className="row between">
+          <div>
+            <div className="label">Recherche</div>
+            <div className="muted small">
+              ◇ {formatNum(state.resources.insight)} lucidité ·{' '}
+              {affordable > 0 ? `${affordable} nœud(s) à portée` : 'rien à portée'}
+            </div>
+          </div>
+        </div>
+        <div className="branch-tabs">
+          {BRANCHES.map((b) => (
+            <button
+              key={b.id}
+              className={b.id === branch ? 'active' : ''}
+              style={b.id === branch ? { color: b.color, borderColor: b.color + '66' } : undefined}
+              onClick={() => setBranch(b.id)}
+            >
+              <b>{b.name}</b>
+              <span className="muted small">{totalInvested(state, b.id)} niv.</span>
+            </button>
+          ))}
+        </div>
+        <div className="muted small">{def.blurb}</div>
+      </div>
+
+      <div className="stack">
+        {nodesOf(branch).map((node) => (
+          <NodeCard key={node.id} node={node} color={def.color} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NodeCard({ node, color }: { node: TechNode; color: string }) {
+  const state = useGame();
+  const level = nodeLevel(state, node.id);
+  const unlocked = isUnlocked(state, node);
+  const maxed = level >= node.max;
+  const cost = nodeCost(node, level);
+  const affordable = !maxed && unlocked && state.resources.insight >= cost;
+
+  if (!unlocked) {
+    const req = node.requires!;
+    return (
+      <div className="card empty">
+        <div>
+          <b>{node.name}</b>
+          <div className="muted small">
+            Requiert {nodeDef(req.node).name} niv. {req.level}
+          </div>
+        </div>
+        <span className="muted">🔒</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card node" style={{ borderColor: maxed ? color + '88' : undefined }}>
+      <div className="row between">
+        <div>
+          <b style={maxed ? { color } : undefined}>{node.name}</b>
+          <div className="muted small">
+            {level > 0 ? node.effect(level) : 'aucun niveau'}
+          </div>
+        </div>
+        <div className="right">
+          <div className="label" style={{ color: maxed ? color : undefined }}>
+            {level} / {node.max}
+          </div>
+        </div>
+      </div>
+
+      <div className="bar">
+        <div
+          className="fill"
+          style={{ width: `${(level / node.max) * 100}%`, background: color }}
+        />
+      </div>
+
+      {!maxed && (
+        <>
+          <div className="muted small">Prochain : {node.effect(level + 1)}</div>
+          <div className="row">
+            <button
+              disabled={!affordable}
+              onClick={() => store.act((s) => research(s, node.id))}
+            >
+              Chercher <span className="muted small">◇ {formatNum(cost)}</span>
+            </button>
+            <button
+              className="ghost"
+              disabled={!affordable}
+              onClick={() => store.act((s) => researchMax(s, node.id))}
+            >
+              Max
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

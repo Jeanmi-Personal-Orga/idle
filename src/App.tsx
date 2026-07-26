@@ -4,13 +4,15 @@ import { useGame, useGameLoop } from './game/store';
 import { BrumeView } from './ui/BrumeView';
 import { GearView } from './ui/GearView';
 import { LabView } from './ui/LabView';
+import { TechView } from './ui/TechView';
 
-type Tab = 'brume' | 'lab' | 'gear';
+type Tab = 'brume' | 'lab' | 'gear' | 'tech';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'brume', label: 'Brume', icon: '☁' },
   { id: 'lab', label: 'Laboratoire', icon: '⚗' },
   { id: 'gear', label: 'Élixirs', icon: '❖' },
+  { id: 'tech', label: 'Recherche', icon: '◇' },
 ];
 
 export default function App() {
@@ -30,6 +32,9 @@ export default function App() {
           <span title="Réactifs — distillent de nouvelles pièces">
             ◆ {formatNum(state.resources.reagent)}
           </span>
+          <span title="Lucidité — alimente la recherche">
+            ◇ {formatNum(state.resources.insight)}
+          </span>
         </div>
       </header>
 
@@ -37,6 +42,7 @@ export default function App() {
         {tab === 'brume' && <BrumeView />}
         {tab === 'lab' && <LabView />}
         {tab === 'gear' && <GearView />}
+        {tab === 'tech' && <TechView />}
       </main>
 
       <nav>

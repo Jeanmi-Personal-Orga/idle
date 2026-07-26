@@ -17,21 +17,24 @@ import {
   upgradeCost,
   waveReward,
 } from './formulas';
+import { insightReward, techMods } from './tech';
 import type { GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 1;
-/** Plafond de progression hors-ligne, en secondes (8 h). */
-const OFFLINE_CAP = 8 * 3600;
+export const SAVE_VERSION = 2;
 
 let idCounter = 0;
 const nextId = () => `i${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 
-export function makeEnemy(district: number, wave: number): GameState['combat']['enemy'] {
+export function makeEnemy(
+  district: number,
+  wave: number,
+  damageMult = 1,
+): GameState['combat']['enemy'] {
   const maxHp = enemyHp(district, wave);
   return {
     hp: maxHp,
     maxHp,
-    damage: enemyDamage(district, wave),
+    damage: enemyDamage(district, wave) * damageMult,
     interval: enemyInterval(),
     cooldown: enemyInterval(),
     name: enemyName(district, wave),
@@ -41,8 +44,9 @@ export function makeEnemy(district: number, wave: number): GameState['combat']['
 export function newGame(): GameState {
   const state: GameState = {
     version: SAVE_VERSION,
-    resources: { essence: 0, reagent: 6, shard: 0 },
+    resources: { essence: 0, reagent: 6, insight: 0, shard: 0 },
     labLevel: 1,
+    tech: {},
     equipped: {},
     stash: [],
     distilling: null,
@@ -95,7 +99,7 @@ function advanceCombat(state: GameState, dt: number, rng: () => number) {
     if (c.reviving <= 0) {
       c.hero.hp = s.health;
       c.wave = 1;
-      c.enemy = makeEnemy(c.district, c.wave);
+      c.enemy = makeEnemy(c.district, c.wave, techMods(state).enemyDamageMult);
     }
     return;
   }
@@ -139,9 +143,14 @@ function advanceCombat(state: GameState, dt: number, rng: () => number) {
 
 function onWaveCleared(state: GameState, rng: () => number) {
   const c = state.combat;
+  const mods = techMods(state);
   const r = waveReward(c.district, c.wave);
-  state.resources.essence += r.essence;
-  if (rng() < r.reagentChance) state.resources.reagent += r.reagent;
+  const guardian = c.wave >= WAVES_PER_DISTRICT;
+  state.resources.essence += r.essence * mods.essenceMult;
+  if (rng() < r.reagentChance) {
+    state.resources.reagent += Math.ceil(r.reagent * mods.reagentMult);
+  }
+  state.resources.insight += insightReward(c.district, guardian, c.wave > c.best);
 
   c.best = Math.max(c.best, c.wave);
 
@@ -157,13 +166,17 @@ function onWaveCleared(state: GameState, rng: () => number) {
   } else {
     c.wave += 1;
   }
-  c.enemy = makeEnemy(c.district, c.wave);
+  c.enemy = makeEnemy(c.district, c.wave, mods.enemyDamageMult);
   c.hero.cooldown = 0;
 }
 
 /** Crédite une partie des gains accumulés hors-ligne. */
 export function applyOffline(state: GameState, now = Date.now()): number {
-  const seconds = Math.min(OFFLINE_CAP, Math.max(0, (now - state.lastSeen) / 1000));
+  const mods = techMods(state);
+  const seconds = Math.min(
+    mods.offlineCapHours * 3600,
+    Math.max(0, (now - state.lastSeen) / 1000),
+  );
   state.lastSeen = now;
   if (seconds < 60) return 0;
 
@@ -171,14 +184,14 @@ export function applyOffline(state: GameState, now = Date.now()): number {
     state.distilling.remaining = Math.max(0, state.distilling.remaining - seconds);
   }
 
-  // On estime le rythme de nettoyage à la vague courante, à 60 % d'efficacité.
+  // On estime le rythme de nettoyage à la vague courante, à efficacité réduite.
   const s = heroStats(state);
   const c = state.combat;
   const timeToKill = enemyHp(c.district, c.wave) / Math.max(1, dps(s));
-  const kills = (seconds / Math.max(1, timeToKill)) * 0.6;
+  const kills = (seconds / Math.max(1, timeToKill)) * mods.offlineEfficiency;
   const r = waveReward(c.district, c.wave);
-  const essence = kills * r.essence;
-  const reagent = Math.floor(kills * r.reagentChance * r.reagent);
+  const essence = kills * r.essence * mods.essenceMult;
+  const reagent = Math.floor(kills * r.reagentChance * r.reagent * mods.reagentMult);
   state.resources.essence += essence;
   state.resources.reagent += reagent;
   if (essence > 0) {
@@ -197,7 +210,7 @@ export function startDistillation(state: GameState, slot: SlotId): boolean {
   const cost = distillCost(state.labLevel);
   if (state.resources.reagent < cost) return false;
   state.resources.reagent -= cost;
-  const total = distillDuration(state.labLevel);
+  const total = distillDuration(state.labLevel, techMods(state));
   state.distilling = { slot, remaining: total, total };
   return true;
 }
@@ -205,7 +218,7 @@ export function startDistillation(state: GameState, slot: SlotId): boolean {
 export function collectDistillation(state: GameState, rng: () => number = Math.random): Item | null {
   const d = state.distilling;
   if (!d || d.remaining > 0) return null;
-  const item = makeItem(d.slot, state.labLevel, rng, nextId());
+  const item = makeItem(d.slot, state.labLevel, rng, nextId(), techMods(state));
   state.distilling = null;
   const current = state.equipped[item.slot];
   // Auto-équipe si le slot est vide ou si l'objet est franchement meilleur.
@@ -232,7 +245,7 @@ export function equip(state: GameState, itemId: string) {
 export function upgrade(state: GameState, itemId: string): boolean {
   const item = findItem(state, itemId);
   if (!item) return false;
-  const cost = upgradeCost(item);
+  const cost = upgradeCost(item, techMods(state));
   if (state.resources.essence < cost) return false;
   state.resources.essence -= cost;
   item.level += 1;
