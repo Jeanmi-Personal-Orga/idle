@@ -115,11 +115,7 @@ export interface CombatState {
   enemies: Enemy[];
   /** Vrai pendant la pause qui suit une mort. */
   reviving: number;
-  /**
-   * Campagne en cours, s'il y en a une : le combat se déroule alors dans ses
-   * vagues et non dans celles du chapitre. Rien n'est payé avant la fin.
-   */
-  campaign: { id: string; wave: number } | null;
+
   /**
    * Secondes restantes avant que les combattants soient au contact. Tant que ce
    * compte n'est pas écoulé, personne ne frappe : l'affichage et la simulation
@@ -143,6 +139,21 @@ export interface LoopFilters {
   subs: StatKey[];
 }
 
+/**
+ * Combat de mission, mené **en parallèle** de celui du chapitre : le héros ne
+ * quitte pas la brume pour aller en mission, les deux fronts avancent en même
+ * temps. Il a donc ses propres points de vie et ses propres ennemis.
+ */
+export interface MissionRun {
+  id: string;
+  wave: number;
+  hero: Hero;
+  enemies: Enemy[];
+  closing: number;
+  /** Secondes de relève après une chute ; une chute annule la mission. */
+  reviving: number;
+}
+
 export interface GameState {
   version: number;
   /** Personnage choisi au début de l'aventure ; null tant qu'il ne l'est pas. */
@@ -162,6 +173,8 @@ export interface GameState {
    * locale. Elles bornent le farm des campagnes sans imposer de minuterie.
    */
   keys: { left: number; day: string };
+  /** Mission en cours, ou `null`. Voir `MissionRun`. */
+  mission: MissionRun | null;
   equipped: Partial<Record<SlotId, Item>>;
   stash: Item[];
   distilling: Distillation | null;

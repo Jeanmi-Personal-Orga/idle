@@ -54,14 +54,17 @@ export const heroIsRanged = (state: GameState) => Boolean(state.equipped.arme?.r
  * - un seul avance → il fait tout le chemin, temps plein ;
  * - deux combattants à distance ne bougent pas → on frappe tout de suite.
  */
-export function closingTime(state: GameState): number {
+export function closingTime(state: GameState, enemies = state.combat.enemies): number {
   const heroRanged = heroIsRanged(state);
-  const foeRanged = state.combat.enemies.every((e) => spriteStyle(e.sprite) === 'ranged');
+  const foeRanged = enemies.every((e) => spriteStyle(e.sprite) === 'ranged');
   // Personne à déplacer : le combat commence immédiatement.
   if (heroRanged && foeRanged) return 0;
   // Le héros reste en arrière : l'ennemi traverse toute l'arène.
   if (heroRanged) return CLOSING_TIME;
-  // Le héros avance jusqu'à sa marque, à mi-distance.
+  // Le héros au corps à corps face à un ennemi qui ne bouge pas — une bestiole
+  // volante — doit aller le chercher jusqu'au bout : tout le chemin est pour lui.
+  if (foeRanged) return CLOSING_TIME;
+  // Les deux avancent : ils se rejoignent au milieu, donc moitié du temps.
   return CLOSING_TIME / 2;
 }
 
@@ -144,38 +147,34 @@ export function refreshKeys(state: GameState) {
   }
 }
 
-/** Entre en campagne : le combat quitte le chapitre pour ses vagues à elle. */
+/**
+ * Lance une mission. Elle se déroule **à côté** du chapitre : le combat de brume
+ * continue pendant ce temps, les deux fronts avancent en parallèle.
+ */
 export function startCampaign(state: GameState, id: string): boolean {
   const campaign = campaignDef(id);
-  if (!campaign || state.combat.campaign) return false;
+  if (!campaign || state.mission) return false;
   // Une clé par tentative, trois par jour : c'est ce qui empêche de farmer une
-  // campagne en boucle et donne du poids au choix de laquelle faire.
+  // mission en boucle et donne du poids au choix de laquelle faire.
   refreshKeys(state);
   if (state.keys.left < 1) return false;
   state.keys.left -= 1;
-  state.combat.campaign = { id, wave: 1 };
-  state.combat.enemies = makeCampaignEnemies(
-    campaign,
-    1,
-    state.ascension.deepest,
-    allMods(state).enemyDamageMult,
-  );
-  state.combat.closing = closingTime(state);
-  state.combat.hero.hp = heroStats(state).health;
-  pushLog(state, `Campagne : ${campaign.name}. ${campaign.waves} vagues, tout ou rien.`);
+  state.mission = {
+    id,
+    wave: 1,
+    hero: { hp: heroStats(state).health, cooldown: 0 },
+    enemies: makeCampaignEnemies(campaign, 1, state.ascension.deepest, allMods(state).enemyDamageMult),
+    closing: 0,
+    reviving: 0,
+  };
+  state.mission.closing = closingTime(state, state.mission.enemies);
+  pushLog(state, `Mission : ${campaign.name}. ${campaign.waves} vagues, tout ou rien.`);
   return true;
 }
 
-/** Quitte la campagne et remet le combat sur le chapitre courant. */
+/** Termine la mission en cours, avec ou sans récompense. */
 export function leaveCampaign(state: GameState, reason: string) {
-  state.combat.campaign = null;
-  state.combat.enemies = makeEnemies(
-    state.combat.district,
-    state.combat.wave,
-    allMods(state).enemyDamageMult,
-  );
-  state.combat.closing = closingTime(state);
-  state.combat.hero.hp = heroStats(state).health;
+  state.mission = null;
   pushLog(state, reason);
 }
 
@@ -190,6 +189,7 @@ export function newGame(): GameState {
     ascension: { count: 0, legacies: {}, deepest: 0 },
     pendingContract: null,
     keys: { left: KEYS_PER_DAY, day: today() },
+    mission: null,
     equipped: {},
     stash: [],
     distilling: null,
@@ -203,7 +203,6 @@ export function newGame(): GameState {
       best: 1,
       hero: { hp: 100, cooldown: 0 },
       enemies: makeEnemies(0, 1),
-      campaign: null,
       reviving: 0,
       closing: CLOSING_TIME / 2,
     },
@@ -227,6 +226,9 @@ export function pushLog(state: GameState, msg: string) {
  * Ils ne sont jamais sauvegardés : purement visuels, et la simulation
  * d'équilibrage tourne sans écouteur.
  */
+/** Sur quel front un événement se produit : la brume, ou la mission. */
+export type FightScope = 'chapter' | 'mission';
+
 export type CombatEvent =
   /** Le héros lance une attaque : une seule par cycle, avant ses coups. */
   | { type: 'swing' }
@@ -234,7 +236,14 @@ export type CombatEvent =
   | { type: 'taken'; damage: number }
   | { type: 'kill' };
 
-export type EventSink = (event: CombatEvent) => void;
+export type EventSink = (event: CombatEvent & { scope?: FightScope }) => void;
+
+/**
+ * Les deux fronts avancent en même temps : chaque événement est étiqueté, pour
+ * que l'arène de la brume n'affiche pas les coups de la mission et l'inverse.
+ */
+const chapterSink = (sink: EventSink): EventSink => (e) => sink({ ...e, scope: 'chapter' });
+const missionSink = (sink: EventSink): EventSink => (e) => sink({ ...e, scope: 'mission' });
 
 const NO_SINK: EventSink = () => {};
 
@@ -249,7 +258,8 @@ export function step(
   sink: EventSink = NO_SINK,
 ) {
   advanceDistillation(state, dt, rng);
-  advanceCombat(state, dt, rng, sink);
+  advanceCombat(state, dt, rng, chapterSink(sink));
+  advanceMission(state, dt, rng, missionSink(sink));
   advanceLabUpgrade(state, dt);
   advanceResearch(state, dt);
 }
@@ -275,11 +285,6 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
     c.hero.hp = Math.min(s.health, c.hero.hp + s.health * 0.4 * dt);
     if (c.reviving <= 0) {
       c.hero.hp = s.health;
-      if (c.campaign) {
-        // Tomber en campagne annule la campagne : rien n'est payé.
-        leaveCampaign(state, 'Tombé en campagne : rien à rapporter.');
-        return;
-      }
       c.wave = 1;
       c.enemies = makeEnemies(c.district, c.wave, allMods(state).enemyDamageMult);
       c.closing = closingTime(state);
@@ -361,41 +366,6 @@ function onWaveCleared(state: GameState, rng: () => number) {
   const c = state.combat;
   const mods = allMods(state);
 
-  // En campagne, aucun butin de vague : tout est payé à la dernière, ou rien.
-  if (c.campaign) {
-    const campaign = campaignDef(c.campaign.id);
-    if (!campaign) {
-      leaveCampaign(state, 'Campagne inconnue, retour au chapitre.');
-      return;
-    }
-    if (c.campaign.wave >= campaign.waves) {
-      // Les trois essences sont payées, avec une part triple pour celle que la
-      // mission met en avant. Le montant suit sa difficulté et la progression.
-      const reward = campaignRewards(campaign, state.ascension.deepest);
-      state.resources.essence += reward.essence;
-      state.resources.reagent += reward.reagent;
-      state.resources.insight += reward.insight;
-      pushLog(
-        state,
-        `${campaign.name} achevée : +${formatNum(reward.essence)} essence, +${formatNum(
-          reward.reagent,
-        )} d'équipement, +${formatNum(reward.insight)} de tech.`,
-      );
-      leaveCampaign(state, 'Retour au chapitre.');
-      return;
-    }
-    c.campaign.wave += 1;
-    c.enemies = makeCampaignEnemies(
-      campaign,
-      c.campaign.wave,
-      state.ascension.deepest,
-      mods.enemyDamageMult,
-    );
-    c.hero.cooldown = 0;
-    c.closing = closingTime(state);
-    return;
-  }
-
   const r = waveReward(c.district, c.wave);
   const guardian = c.wave >= WAVES_PER_DISTRICT;
   const isNewBest = c.wave > c.best;
@@ -439,6 +409,108 @@ function onWaveCleared(state: GameState, rng: () => number) {
   c.hero.cooldown = 0;
   // La vague suivante commence par la marche, pas par un coup.
   c.closing = closingTime(state);
+}
+
+/**
+ * Fait avancer la mission en cours. Même mécanique que le combat de chapitre —
+ * approche, frappes, riposte — mais sans butin par ennemi : tout est payé à la
+ * dernière vague, et une chute annule la mission.
+ */
+function advanceMission(state: GameState, dt: number, rng: () => number, sink: EventSink) {
+  const m = state.mission;
+  if (!m) return;
+  const campaign = campaignDef(m.id);
+  if (!campaign) {
+    state.mission = null;
+    return;
+  }
+  const s = heroStats(state);
+
+  if (m.reviving > 0) {
+    // Une chute en mission n'a pas de seconde chance : on rentre bredouille.
+    leaveCampaign(state, `${campaign.name} : tombé en route, rien à rapporter.`);
+    return;
+  }
+
+  m.hero.hp = Math.min(s.health, m.hero.hp + ((s.health * s.condensation) / 100) * dt);
+
+  if (m.closing > 0) {
+    m.closing = Math.max(0, m.closing - dt);
+    if (m.closing > 0) return;
+    m.hero.cooldown = 0;
+    for (const e of m.enemies) e.cooldown = e.interval;
+  }
+
+  m.hero.cooldown -= dt;
+  const interval = attackInterval(s);
+  let guard = 0;
+  while (m.hero.cooldown <= 0 && guard++ < 20) {
+    const targetIndex = m.enemies.findIndex((e) => e.hp > 0);
+    if (targetIndex < 0) break;
+    const target = m.enemies[targetIndex];
+    m.hero.cooldown += interval;
+    sink({ type: 'swing' });
+    const hits = 1 + (rng() < chainChance(s) ? 1 : 0);
+    for (let i = 0; i < hits; i++) {
+      if (target.hp <= 0) break;
+      const crit = rng() < critChance(s);
+      const dmg = s.power * (crit ? 1 + s.rupture / 100 : 1);
+      target.hp -= dmg;
+      sink({ type: 'hit', damage: dmg, crit, targetIndex });
+      if (s.osmosis > 0) m.hero.hp = Math.min(s.health, m.hero.hp + (dmg * s.osmosis) / 100);
+    }
+    if (target.hp <= 0) sink({ type: 'kill' });
+    if (m.enemies.every((e) => e.hp <= 0)) {
+      onMissionWaveCleared(state, campaign);
+      return;
+    }
+  }
+
+  for (const enemy of m.enemies) {
+    if (enemy.hp <= 0) continue;
+    enemy.cooldown -= dt;
+    while (enemy.cooldown <= 0) {
+      enemy.cooldown += enemy.interval;
+      m.hero.hp -= enemy.damage;
+      sink({ type: 'taken', damage: enemy.damage });
+      if (m.hero.hp <= 0) {
+        m.hero.hp = 0;
+        leaveCampaign(state, `${campaign.name} : tombé face à ${enemy.name}.`);
+        return;
+      }
+    }
+  }
+}
+
+/** Vague de mission nettoyée : la suivante, ou le paiement final. */
+function onMissionWaveCleared(state: GameState, campaign: Campaign) {
+  const m = state.mission;
+  if (!m) return;
+  if (m.wave >= campaign.waves) {
+    // Les trois essences sont payées, avec une part triple pour celle que la
+    // mission met en avant. Le montant suit sa difficulté et la progression.
+    const reward = campaignRewards(campaign, state.ascension.deepest);
+    state.resources.essence += reward.essence;
+    state.resources.reagent += reward.reagent;
+    state.resources.insight += reward.insight;
+    state.mission = null;
+    pushLog(
+      state,
+      `${campaign.name} achevée : +${formatNum(reward.essence)} essence, +${formatNum(
+        reward.reagent,
+      )} d'équipement, +${formatNum(reward.insight)} de tech.`,
+    );
+    return;
+  }
+  m.wave += 1;
+  m.enemies = makeCampaignEnemies(
+    campaign,
+    m.wave,
+    state.ascension.deepest,
+    allMods(state).enemyDamageMult,
+  );
+  m.hero.cooldown = 0;
+  m.closing = closingTime(state, m.enemies);
 }
 
 /** Crédite une partie des gains accumulés hors-ligne. */

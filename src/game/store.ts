@@ -11,6 +11,7 @@ import {
   startRandomDistillation,
   step,
   type CombatEvent,
+  type FightScope,
 } from './engine';
 import { distillCost } from './formulas';
 import { KEYS_PER_DAY } from './campaigns';
@@ -43,13 +44,16 @@ const HIT_TTL = 700;
 
 class GameStore {
   state: GameState;
-  /** Coups portés récemment ; vidés au fil du temps. */
-  hits: FloatingHit[] = [];
-  /** Coups **reçus** récemment : mêmes chiffres flottants, sur le héros. */
-  taken: FloatingHit[] = [];
-  /** Compteurs d'attaques, pour que l'arène joue les bonnes animations. */
-  heroSwings = 0;
-  foeSwings = 0;
+  /**
+   * Coups portés et reçus, **par front** : la brume et la mission se battent en
+   * parallèle, et les chiffres de l'une n'ont rien à faire dans l'arène de
+   * l'autre.
+   */
+  hits: Record<FightScope, FloatingHit[]> = { chapter: [], mission: [] };
+  taken: Record<FightScope, FloatingHit[]> = { chapter: [], mission: [] };
+  /** Compteurs d'attaques par front, pour les animations. */
+  heroSwings: Record<FightScope, number> = { chapter: 0, mission: 0 };
+  foeSwings: Record<FightScope, number> = { chapter: 0, mission: 0 };
   private listeners = new Set<() => void>();
   private revision = 0;
   private accumulator = 0;
@@ -97,10 +101,14 @@ class GameStore {
         this.accumulator -= TICK;
         step(this.state, TICK, Math.random, sink);
       }
-      if (this.hits.length || this.taken.length) {
-        const cutoff = now - HIT_TTL;
-        this.hits = this.hits.filter((h) => h.born > cutoff);
-        this.taken = this.taken.filter((h) => h.born > cutoff);
+      const cutoff = now - HIT_TTL;
+      for (const scope of ['chapter', 'mission'] as FightScope[]) {
+        if (this.hits[scope].length) {
+          this.hits[scope] = this.hits[scope].filter((h) => h.born > cutoff);
+        }
+        if (this.taken[scope].length) {
+          this.taken[scope] = this.taken[scope].filter((h) => h.born > cutoff);
+        }
       }
       // La récolte est automatique : l'attente est le coût, pas le clic.
       if (this.state.distilling && this.state.distilling.remaining <= 0) {
@@ -133,9 +141,10 @@ class GameStore {
     });
   }
 
-  private onCombatEvent(event: CombatEvent) {
+  private onCombatEvent(event: CombatEvent & { scope?: FightScope }) {
+    const scope: FightScope = event.scope ?? 'chapter';
     if (event.type === 'hit') {
-      this.hits.push({
+      this.hits[scope].push({
         id: ++this.hitId,
         damage: event.damage,
         crit: event.crit,
@@ -145,12 +154,12 @@ class GameStore {
         dy: Math.random() * 12,
       });
       // Garde-fou : à très haute vitesse d'attaque, on ne garde que les derniers.
-      if (this.hits.length > 12) this.hits.splice(0, this.hits.length - 12);
+      if (this.hits[scope].length > 12) this.hits[scope].splice(0, this.hits[scope].length - 12);
     } else if (event.type === 'swing') {
-      this.heroSwings++;
+      this.heroSwings[scope]++;
     } else if (event.type === 'taken') {
-      this.foeSwings++;
-      this.taken.push({
+      this.foeSwings[scope]++;
+      this.taken[scope].push({
         id: ++this.hitId,
         damage: event.damage,
         crit: false,
@@ -159,7 +168,9 @@ class GameStore {
         dx: Math.random() * 30 - 15,
         dy: Math.random() * 10,
       });
-      if (this.taken.length > 8) this.taken.splice(0, this.taken.length - 8);
+      if (this.taken[scope].length > 8) {
+        this.taken[scope].splice(0, this.taken[scope].length - 8);
+      }
     }
   }
 
@@ -288,18 +299,24 @@ export function migrate(save: GameState): GameState | null {
   }
   if (save.version === 12) {
     // v13 : campagnes.
-    save.combat.campaign = null;
     save.version = 13;
   }
   if (save.version === 13) {
     // v14 : clés de campagne, trois par jour.
     save.keys = { left: KEYS_PER_DAY, day: today() };
+    save.mission = null;
     save.version = 14;
   }
   return save.version === SAVE_VERSION ? save : null;
 }
 
 export const store = new GameStore();
+
+// En développement seulement : permet d'observer l'état depuis la console ou un
+// harnais de test, sans instrumenter le jeu lui-même.
+if (import.meta.env.DEV) {
+  (window as unknown as { store: GameStore }).store = store;
+}
 
 /** Abonne le composant à chaque tick du moteur. */
 export function useGame(): GameState {

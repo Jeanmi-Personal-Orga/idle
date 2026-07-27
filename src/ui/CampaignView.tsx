@@ -1,4 +1,10 @@
-import { CAMPAIGNS, KEYS_PER_DAY, campaignDepth, campaignRewards } from '../game/campaigns';
+import {
+  CAMPAIGNS,
+  KEYS_PER_DAY,
+  campaignDepth,
+  campaignRewards,
+  type Campaign,
+} from '../game/campaigns';
 import { formatNum, leaveCampaign, startCampaign } from '../game/engine';
 import { heroStats, powerScore, recommendedPower } from '../game/formulas';
 import { store, useGame } from '../game/store';
@@ -20,7 +26,7 @@ import { ResIcon } from './ResIcon';
  */
 export function CampaignView() {
   const state = useGame();
-  const active = state.combat.campaign;
+  const active = state.mission;
   const power = powerScore(heroStats(state));
   const keys = state.keys?.left ?? 0;
 
@@ -28,7 +34,7 @@ export function CampaignView() {
     <div className="view">
       <div className="card">
         <div className="row between">
-          <div className="label">Missions</div>
+          <div className="label">Campagnes</div>
           <div className="right">
             <b>
               🔑 {keys} / {KEYS_PER_DAY}
@@ -74,7 +80,7 @@ export function CampaignView() {
             </div>
 
             {running ? (
-              <CampaignFight waves={campaign.waves} wave={active.wave} />
+              <CampaignFight campaign={campaign} depth={depth} />
             ) : (
               <button
                 className="ascend"
@@ -96,30 +102,33 @@ export function CampaignView() {
   );
 }
 
-/** Le combat de la mission, joué dans sa propre carte. */
-function CampaignFight({ waves, wave }: { waves: number; wave: number }) {
+/**
+ * Le combat de la mission, joué dans sa propre carte — et avec ses propres points
+ * de vie : le combat de brume continue pendant ce temps, sur son propre front.
+ */
+function CampaignFight({ campaign, depth }: { campaign: Campaign; depth: number }) {
   const state = useGame();
-  const c = state.combat;
+  const m = state.mission!;
   const s = heroStats(state);
 
   return (
     <>
       <div className="bar">
-        <div className="fill hero" style={{ width: `${(wave / waves) * 100}%` }} />
+        <div className="fill hero" style={{ width: `${(m.wave / campaign.waves) * 100}%` }} />
       </div>
       <div className="muted small">
-        Vague {wave} / {waves}
+        Vague {m.wave} / {campaign.waves}
       </div>
 
-      <Arena />
+      <Arena fight={m} scope="mission" district={depth} />
 
       <div className="bars">
-        <FighterBar side="hero" name="Toi" hp={c.hero.hp} max={s.health} />
+        <FighterBar side="hero" name="Toi" hp={m.hero.hp} max={s.health} />
         <FighterBar
           side="foe"
-          name={c.enemies[0]?.name ?? ''}
-          hp={c.enemies.reduce((sum, e) => sum + Math.max(0, e.hp), 0)}
-          max={c.enemies.reduce((sum, e) => sum + e.maxHp, 0)}
+          name={m.enemies[0]?.name ?? ''}
+          hp={m.enemies.reduce((sum, e) => sum + Math.max(0, e.hp), 0)}
+          max={m.enemies.reduce((sum, e) => sum + e.maxHp, 0)}
         />
       </div>
 

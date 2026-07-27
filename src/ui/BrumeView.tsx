@@ -38,7 +38,6 @@ import { mods as allMods, type Mods } from "../game/modifiers";
 import { DEFAULT_CHARACTER } from "../game/characters";
 import { store, useGame } from "../game/store";
 import type { Item, PurityId, SlotId, StatKey } from "../game/types";
-import { campaignDef } from "../game/campaigns";
 import { Arena, FighterBar } from "./Arena";
 import { Cauldron } from "./Cauldron";
 import { ItemCard, PurityLegend, SlotIcon } from "./ItemCard";
@@ -63,8 +62,6 @@ export function BrumeView() {
   const c = state.combat;
   const s = heroStats(state);
   const dead = c.reviving > 0;
-  const campaign = c.campaign ? campaignDef(c.campaign.id) : undefined;
-  const [showInfo, setShowInfo] = useState(false);
   const [showMissions, setShowMissions] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
 
@@ -74,25 +71,12 @@ export function BrumeView() {
       <div className={`card scene ${dead ? "lantern-out" : ""}`}>
         <div className="row between">
           <div>
-            {/* En campagne, la scène annonce la campagne : sinon on croit se
-                battre dans le chapitre et on ne comprend pas l'enjeu. */}
-            {campaign ? (
-              <>
-                <div className="label">🗺 {campaign.name}</div>
-                <div className="muted small">
-                  Vague {c.campaign!.wave} / {campaign.waves} · récompense à la dernière
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="label">{districtLabel(c.district)}</div>
-                <div className="muted small">
-                  Vague {c.wave} / {WAVES_PER_DISTRICT}
-                  {c.wave === WAVES_PER_DISTRICT && " · gardien"}
-                  {c.enemies.length > 1 && ` · ${c.enemies.length} ennemis`}
-                </div>
-              </>
-            )}
+            <div className="label">{districtLabel(c.district)}</div>
+            <div className="muted small">
+              Vague {c.wave} / {WAVES_PER_DISTRICT}
+              {c.wave === WAVES_PER_DISTRICT && " · gardien"}
+              {c.enemies.length > 1 && ` · ${c.enemies.length} ennemis`}
+            </div>
           </div>
           <div className="right">
             <div className="row">
@@ -100,9 +84,6 @@ export function BrumeView() {
                 🎯
                 {/* Pastille : une récompense attend d'être réclamée. */}
                 {state.pendingContract && <em className="badge dot" />}
-              </button>
-              <button className="ghost" title="Stats et équipement" onClick={() => setShowInfo(true)}>
-                ⓘ
               </button>
             </div>
             {/* Une seule mesure lisible, à la place du détail technique. */}
@@ -153,7 +134,6 @@ export function BrumeView() {
       {showMissions && (
         <MissionPopup best={c.best} onClose={() => setShowMissions(false)} />
       )}
-      {showInfo && <InfoPopup onClose={() => setShowInfo(false)} />}
       {logOpen && <LogPopup log={state.log} onClose={() => setLogOpen(false)} />}
     </div>
   );
@@ -328,11 +308,23 @@ function GearCard({ state }: { state: ReturnType<typeof useGame> }) {
   // place tant qu'on ne regarde pas.
   const [openSlot, setOpenSlot] = useState<SlotId | null>(null);
   const [showStash, setShowStash] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const openItem = openSlot ? state.equipped[openSlot] : undefined;
 
   return (
     <div className="card compact">
-      <div className="label">Équipé</div>
+      <div className="row between">
+        <div className="label">Équipé</div>
+        {/* Les statistiques complètes se lisent depuis l'équipement, là où on se
+            pose la question — plus depuis l'en-tête du combat. */}
+        <button
+          className="ghost"
+          title="Statistiques détaillées"
+          onClick={() => setShowInfo(true)}
+        >
+          ⓘ
+        </button>
+      </div>
       <div className="grid-icons">
         {SLOTS.map((slot) => {
           const item = state.equipped[slot.id];
@@ -376,6 +368,7 @@ function GearCard({ state }: { state: ReturnType<typeof useGame> }) {
       </button>
 
       {showStash && <StashPopup onClose={() => setShowStash(false)} />}
+      {showInfo && <InfoPopup onClose={() => setShowInfo(false)} />}
     </div>
   );
 }

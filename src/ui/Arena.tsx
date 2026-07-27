@@ -4,6 +4,8 @@ import { WAVES_PER_DISTRICT, cycleOf } from '../game/content';
 import { closingTime, formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
+import type { Enemy, Hero } from '../game/types';
+import type { FightScope } from '../game/engine';
 import { Sprite } from './Sprite';
 
 /**
@@ -29,9 +31,28 @@ import { Sprite } from './Sprite';
 const CONTACT_GAP = 6;
 
 
-export function Arena() {
+export function Arena({
+  fight,
+  scope = 'chapter',
+  district,
+}: {
+  /** Le combat à afficher : celui du chapitre, ou celui d'une mission. */
+  fight?: { hero: Hero; enemies: Enemy[]; closing: number; reviving: number };
+  scope?: FightScope;
+  /** Profondeur, pour la teinte des ennemis et le décor. */
+  district?: number;
+} = {}) {
   const state = useGame();
-  const c = state.combat;
+  // Sans combat fourni, on affiche celui du chapitre : c'est le cas courant.
+  const chapter = state.combat;
+  const c = {
+    hero: fight?.hero ?? chapter.hero,
+    enemies: fight?.enemies ?? chapter.enemies,
+    closing: fight?.closing ?? chapter.closing,
+    reviving: fight?.reviving ?? chapter.reviving,
+    district: district ?? chapter.district,
+    wave: chapter.wave,
+  };
 
   const hero = state.character ?? DEFAULT_CHARACTER;
   // Un mort quitte la scène : la cible affichée est le **premier ennemi encore
@@ -46,7 +67,7 @@ export function Arena() {
   /** Morts déjà tombés dans cette vague : le héros gagne du terrain sur chacun. */
   const fallen = c.enemies.filter((e) => e.hp <= 0).length;
 
-  const guardian = c.wave === WAVES_PER_DISTRICT;
+  const guardian = !fight && c.wave === WAVES_PER_DISTRICT;
   // C'est l'arme équipée qui décide : de mêlée, il faut traverser.
   const heroStyle = state.equipped.arme?.ranged ? 'ranged' : 'melee';
   const foeStyle = spriteStyle(foe);
@@ -61,10 +82,18 @@ export function Arena() {
   // héros à sa marque, à mi-distance, et il y reste : les vagues suivantes
   // viennent à lui. Une arme à distance le laisse en arrière, et c'est l'ennemi
   // qui traverse toute l'arène.
-  // À chaque ennemi tombé, le héros pousse un peu plus loin : la vague recule
-  // visiblement au lieu de rester plantée au même endroit.
-  const heroTravel = heroStyle === 'melee' ? gap / 2 + fallen * 10 : 0;
-  const foeTravel = foeStyle === 'melee' ? gap - heroTravel : 0;
+  // Qui couvre quelle distance, à vitesse égale :
+  //
+  // - les deux au contact : ils se rejoignent au milieu ;
+  // - héros au contact, ennemi à distance (une bestiole qui vole) : le héros fait
+  //   **tout** le chemin, il va la chercher sous le nez ;
+  // - héros à distance : il ne bouge pas, l'ennemi traverse.
+  //
+  // Chaque ennemi tombé pousse le héros un peu plus loin : la vague recule
+  // visiblement au lieu de rester plantée.
+  const heroShare = heroStyle === 'melee' ? (foeStyle === 'melee' ? 0.5 : 1) : 0;
+  const heroTravel = gap * heroShare + (heroShare > 0 ? fallen * 10 : 0);
+  const foeTravel = foeStyle === 'melee' ? gap - gap * heroShare : 0;
   // La marche dure exactement l'approche accordée par le moteur, et se joue
   // pendant son décompte : à l'arrivée, les coups partent.
   const walkMs = Math.max(120, closingTime(state) * 1000);
@@ -78,14 +107,14 @@ export function Arena() {
   const foeWalking = walking && foeTravel > 0;
 
   // Frappes : impulsion vers l'adversaire au moment du coup.
-  const heroStrike = usePulse(store.heroSwings, 220) && !dead;
-  const foeStrike = usePulse(store.foeSwings, 220) && !dead;
+  const heroStrike = usePulse(store.heroSwings[scope], 220) && !dead;
+  const foeStrike = usePulse(store.foeSwings[scope], 220) && !dead;
   // Impacts : la cible encaisse — éclat blanc et léger recul. Sur une vague à
   // plusieurs ennemis, on ne flashe que celui visé (targetIndex), sinon un coup
   // sur le deuxième ennemi ferait sursauter le premier.
-  const lastHitOnMain = [...store.hits].reverse().find((h) => h.targetIndex === 0);
+  const lastHitOnMain = [...store.hits[scope]].reverse().find((h) => h.targetIndex === 0);
   const foeHit = usePulse(lastHitOnMain?.id ?? 0, 150);
-  const heroHit = usePulse(store.foeSwings, 170) && !dead;
+  const heroHit = usePulse(store.foeSwings[scope], 170) && !dead;
 
   // Le héros gagne sa marque et l'occupe : plus de retour au point de départ
   // entre deux vagues, donc plus de saut.
@@ -129,7 +158,7 @@ export function Arena() {
           />
           {heroHit && <span className="impact" aria-hidden="true" />}
           {/* Ce que le héros encaisse, en chiffres, au moment où il l'encaisse. */}
-          <TakenHits />
+          <TakenHits scope={scope} />
         </div>
       </div>
 
@@ -170,18 +199,19 @@ export function Arena() {
           </div>
           {/* L'éclat au point d'impact : sans lui, on ne voit pas le coup porter. */}
           {foeHit && <span className="impact" aria-hidden="true" />}
-          <FloatingHits />
+          <FloatingHits scope={scope} />
         </div>
       </div>
 
       {/* Un ennemi à distance projette, puisqu'il ne s'approche jamais. */}
       {foeStyle === 'ranged' && (
-        <Projectiles distance={gap} swings={store.foeSwings} color="#9ad6c0" />
+        <Projectiles distance={gap} swings={store.foeSwings[scope]} color="#9ad6c0" />
       )}
 
       {/* Vague de contrat : les ennemis en surnombre restent groupés, sans marche. */}
       {extras.map((enemy, i) => (
         <ExtraFoe
+          scope={scope}
           key={`${frontIndex}-${i}`}
           enemy={enemy}
           index={frontIndex + i + 1}
@@ -220,16 +250,18 @@ function foeAnim(walking: boolean, striking: boolean, hit: boolean): string {
  * strict nécessaire pour rester lisible sans reconstruire toute la scène.
  */
 function ExtraFoe({
+  scope,
   enemy,
   index,
   offset,
 }: {
+  scope: FightScope;
   enemy: { hp: number; maxHp: number; sprite: string; name: string };
   index: number;
   offset: number;
 }) {
   useGame();
-  const lastHit = [...store.hits].reverse().find((h) => h.targetIndex === index);
+  const lastHit = [...store.hits[scope]].reverse().find((h) => h.targetIndex === index);
   const hit = usePulse(lastHit?.id ?? 0, 150);
   return (
     <div
@@ -338,11 +370,11 @@ function Projectiles({
 }
 
 /** Dégâts reçus par le héros : mêmes chiffres flottants, mais en rouge. */
-function TakenHits() {
+function TakenHits({ scope }: { scope: FightScope }) {
   useGame();
   return (
     <div className="hits" aria-hidden="true">
-      {store.taken.map((h) => (
+      {store.taken[scope].map((h) => (
         <span
           key={h.id}
           className="hit taken"
@@ -356,11 +388,11 @@ function TakenHits() {
 }
 
 /** Chiffres de dégâts : montée + fondu, critiques 1,4× et en jaune (§3). */
-function FloatingHits() {
+function FloatingHits({ scope }: { scope: FightScope }) {
   useGame();
   return (
     <div className="hits" aria-hidden="true">
-      {store.hits.map((h) => (
+      {store.hits[scope].map((h) => (
         <span
           key={h.id}
           className={`hit ${h.crit ? 'crit' : ''}`}

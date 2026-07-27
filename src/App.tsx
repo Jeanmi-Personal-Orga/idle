@@ -18,7 +18,7 @@ type Tab = 'brume' | 'camp' | 'tech' | 'shop' | 'ascend';
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'shop', label: 'Boutique', icon: '💰' },
   { id: 'brume', label: 'Brume', icon: '☁' },
-  { id: 'camp', label: 'Missions', icon: '🎯' },
+  { id: 'camp', label: 'Campagnes', icon: '🗺' },
   { id: 'tech', label: 'Recherche', icon: '◇' },
   { id: 'ascend', label: 'Dissolution', icon: '★' },
 ];
