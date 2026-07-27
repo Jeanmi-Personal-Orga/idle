@@ -183,7 +183,10 @@ export function newGame(): GameState {
     version: SAVE_VERSION,
     // null : le sélecteur de personnage s'affiche au premier lancement.
     character: null,
-    resources: { essence: 0, reagent: 6, insight: 0, shard: 0, catalyst: 0, goldCoin: 0 },
+    // On démarre avec 20 sacs d'or et rien d'autre : de quoi dépanner une
+    // première fabrication au comptoir, sans avance d'essence ni de matière.
+    // Les matériaux tombent dès le premier ennemi tué, donc rien ne bloque.
+    resources: { essence: 0, reagent: 0, insight: 0, shard: 0, catalyst: 0, goldCoin: 20 },
     labLevel: 1,
     tech: {},
     ascension: { count: 0, legacies: {}, deepest: 0 },
