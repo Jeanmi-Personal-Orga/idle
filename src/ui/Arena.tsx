@@ -34,13 +34,17 @@ export function Arena() {
   const c = state.combat;
 
   const hero = state.character ?? DEFAULT_CHARACTER;
-  // Le premier ennemi du tableau est toujours la cible du héros et porte la
-  // mise en scène complète (marche, contact). Les suivants, sur une vague à
-  // plusieurs ennemis, se contentent d'un affichage plus simple à côté.
-  const sprite = c.enemies[0].sprite;
+  // Un mort quitte la scène : la cible affichée est le **premier ennemi encore
+  // vivant**, et lui seul porte la mise en scène complète (marche, contact).
+  // Ceux qui restent derrière avancent d'un rang à chaque mort.
+  const frontIndex = Math.max(0, c.enemies.findIndex((e) => e.hp > 0));
+  const front = c.enemies[frontIndex] ?? c.enemies[0];
+  const sprite = front.sprite;
   // « Écho de soi » du Puits Prismatique : l'ennemi est le sprite du joueur.
   const foe = sprite === 'self' ? hero : sprite;
-  const extras = c.enemies.slice(1);
+  const extras = c.enemies.slice(frontIndex + 1).filter((e) => e.hp > 0);
+  /** Morts déjà tombés dans cette vague : le héros gagne du terrain sur chacun. */
+  const fallen = c.enemies.filter((e) => e.hp <= 0).length;
 
   const guardian = c.wave === WAVES_PER_DISTRICT;
   // C'est l'arme équipée qui décide : de mêlée, il faut traverser.
@@ -57,7 +61,9 @@ export function Arena() {
   // héros à sa marque, à mi-distance, et il y reste : les vagues suivantes
   // viennent à lui. Une arme à distance le laisse en arrière, et c'est l'ennemi
   // qui traverse toute l'arène.
-  const heroTravel = heroStyle === 'melee' ? gap / 2 : 0;
+  // À chaque ennemi tombé, le héros pousse un peu plus loin : la vague recule
+  // visiblement au lieu de rester plantée au même endroit.
+  const heroTravel = heroStyle === 'melee' ? gap / 2 + fallen * 10 : 0;
   const foeTravel = foeStyle === 'melee' ? gap - heroTravel : 0;
   // La marche dure exactement l'approche accordée par le moteur, et se joue
   // pendant son décompte : à l'arrivée, les coups partent.
@@ -122,6 +128,8 @@ export function Arena() {
             className={heroHit ? 'flash' : ''}
           />
           {heroHit && <span className="impact" aria-hidden="true" />}
+          {/* Ce que le héros encaisse, en chiffres, au moment où il l'encaisse. */}
+          <TakenHits />
         </div>
       </div>
 
@@ -133,7 +141,7 @@ export function Arena() {
           et se trouvait déjà à destination.
         */}
         <div
-          key={`${c.district}-${c.wave}`}
+          key={`${c.district}-${c.wave}-${frontIndex}`}
           className={`mover ${foeTravel > 0 ? 'approaching' : ''}`}
           style={{
             ['--to' as string]: `${-foeTravel}px`,
@@ -173,7 +181,12 @@ export function Arena() {
 
       {/* Vague de contrat : les ennemis en surnombre restent groupés, sans marche. */}
       {extras.map((enemy, i) => (
-        <ExtraFoe key={i} enemy={enemy} index={i + 1} offset={(i + 1) * 26} />
+        <ExtraFoe
+          key={`${frontIndex}-${i}`}
+          enemy={enemy}
+          index={frontIndex + i + 1}
+          offset={(i + 1) * 26}
+        />
       ))}
     </div>
   );
@@ -218,15 +231,16 @@ function ExtraFoe({
   useGame();
   const lastHit = [...store.hits].reverse().find((h) => h.targetIndex === index);
   const hit = usePulse(lastHit?.id ?? 0, 150);
-  const dead = enemy.hp <= 0;
   return (
     <div
-      className={`fighter-slot foe extra ${dead ? 'fallen' : ''}`}
-      style={{ transform: `translateX(-${offset}px)`, opacity: dead ? 0.35 : 1 }}
+      className="fighter-slot foe extra"
+      // Le décalage est animé : quand le rang de devant tombe, ceux de derrière
+      // avancent d'un cran au lieu de sauter.
+      style={{ transform: `translateX(-${offset}px)` }}
     >
       <Sprite
         character={enemy.sprite === 'self' ? DEFAULT_CHARACTER : enemy.sprite}
-        anim={dead ? 'death' : hit ? 'hurt' : 'idle'}
+        anim={hit ? 'hurt' : 'idle'}
         fallbackAnim={['idle']}
         flip
         className={hit ? 'flash' : ''}
@@ -318,6 +332,24 @@ function Projectiles({
             ['--travel' as string]: `${-distance}px`,
           }}
         />
+      ))}
+    </div>
+  );
+}
+
+/** Dégâts reçus par le héros : mêmes chiffres flottants, mais en rouge. */
+function TakenHits() {
+  useGame();
+  return (
+    <div className="hits" aria-hidden="true">
+      {store.taken.map((h) => (
+        <span
+          key={h.id}
+          className="hit taken"
+          style={{ left: `calc(50% + ${h.dx}px)`, top: `${h.dy}px` }}
+        >
+          −{formatNum(h.damage)}
+        </span>
       ))}
     </div>
   );

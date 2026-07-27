@@ -158,25 +158,56 @@ body {
 
 header {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.header-top {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--line);
 }
 
 .title {
   font-weight: 600;
   letter-spacing: 0.02em;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
 }
 
 .resources {
+  /*
+   * Les cinq monnaies tiennent sur **une seule ligne**, quelle que soit la
+   * largeur : elles se comparent d'un coup d'œil, et l'en-tête ne change pas de
+   * hauteur quand une nouvelle apparaît. En cas de manque de place, la ligne
+   * défile plutôt que de se replier.
+   */
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
   font-variant-numeric: tabular-nums;
-  font-size: 14px;
+  font-size: 12.5px;
+}
+
+.resources::-webkit-scrollbar {
+  display: none;
+}
+
+.resources .ticker {
+  flex: none;
+  white-space: nowrap;
 }
 
 .res-essence {
@@ -359,6 +390,7 @@ main {
 
 /* Ennemis en surnombre (vague de contrat) : en retrait, sans mise en scène. */
 .fighter-slot.foe.extra {
+  transition: transform 0.5s ease-out;
   z-index: 0;
   transform-origin: bottom right;
   scale: 0.8;
@@ -701,6 +733,11 @@ main {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
   animation: rise 0.7s ease-out forwards;
   white-space: nowrap;
+}
+
+/* Les dégâts reçus se lisent au même endroit que ceux qu'on porte, mais en rouge. */
+.hit.taken {
+  color: #ff8b9a;
 }
 
 /* Rien d'autre ne clignote pendant le combat : seuls les critiques ressortent. */
@@ -1383,6 +1420,38 @@ nav .icon {
   image-rendering: pixelated;
   vertical-align: -2px;
   width: auto;
+}
+
+/* Rotation des pièces : six frames de la planche, jouées en pas discrets. */
+@keyframes coin-spin {
+  to {
+    background-position-x: var(--spin-end);
+  }
+}
+
+.res-icon.spin {
+  display: inline-block;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  image-rendering: pixelated;
+  animation: coin-spin 3.2s steps(16) infinite;
+}
+
+/* Les gemmes n'ont pas de rotation dans la planche : un battement suffit. */
+@keyframes gem-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+    transform: translateY(0);
+  }
+  50% {
+    filter: brightness(1.35);
+    transform: translateY(-1px);
+  }
+}
+
+.res-icon.pulse {
+  animation: gem-pulse 2.4s ease-in-out infinite;
 }
 
 /* --- Compteurs de ressources : un gain doit se voir --- */

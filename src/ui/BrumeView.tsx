@@ -101,11 +101,6 @@ export function BrumeView() {
             name="Toi"
             hp={c.hero.hp}
             max={s.health}
-            // Ce qu'on encaisse à chaque salve adverse : la seule information
-            // vraiment utile pour savoir si on va tenir.
-            note={`−${formatNum(
-              c.enemies.reduce((sum, e) => sum + (e.hp > 0 ? e.damage : 0), 0),
-            )} par salve`}
           />
           <FighterBar
             side="foe"

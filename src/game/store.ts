@@ -40,8 +40,10 @@ const HIT_TTL = 700;
 
 class GameStore {
   state: GameState;
-  /** Coups récents pour l'affichage ; vidés au fil du temps.  */
+  /** Coups portés récemment ; vidés au fil du temps. */
   hits: FloatingHit[] = [];
+  /** Coups **reçus** récemment : mêmes chiffres flottants, sur le héros. */
+  taken: FloatingHit[] = [];
   /** Compteurs d'attaques, pour que l'arène joue les bonnes animations. */
   heroSwings = 0;
   foeSwings = 0;
@@ -90,9 +92,10 @@ class GameStore {
         this.accumulator -= TICK;
         step(this.state, TICK, Math.random, sink);
       }
-      if (this.hits.length) {
+      if (this.hits.length || this.taken.length) {
         const cutoff = now - HIT_TTL;
         this.hits = this.hits.filter((h) => h.born > cutoff);
+        this.taken = this.taken.filter((h) => h.born > cutoff);
       }
       // La récolte est automatique : l'attente est le coût, pas le clic.
       if (this.state.distilling && this.state.distilling.remaining <= 0) {
@@ -142,6 +145,16 @@ class GameStore {
       this.heroSwings++;
     } else if (event.type === 'taken') {
       this.foeSwings++;
+      this.taken.push({
+        id: ++this.hitId,
+        damage: event.damage,
+        crit: false,
+        targetIndex: -1,
+        born: performance.now(),
+        dx: Math.random() * 30 - 15,
+        dy: Math.random() * 10,
+      });
+      if (this.taken.length > 8) this.taken.splice(0, this.taken.length - 8);
     }
   }
 

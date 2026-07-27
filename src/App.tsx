@@ -76,7 +76,21 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <div className="title">L'Alchimiste de Brume</div>
+        <div className="header-top">
+          <div className="title">L'Alchimiste de Brume</div>
+          {session ? (
+            <div className="muted small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {session.user.username}
+              <button className="ghost" onClick={() => authStore.logout()}>
+                Déconnexion
+              </button>
+            </div>
+          ) : (
+            <button className="ghost" onClick={() => setShowAuth(true)}>
+              Se connecter
+            </button>
+          )}
+        </div>
         {/* Une seule source de vérité pour les ressources : leur nom, leur icône
             et ce à quoi elles servent viennent de `resources.ts`. */}
         <div className="resources">
@@ -84,18 +98,6 @@ export default function App() {
             <ResourceTicker key={r.id} id={r.id} />
           ))}
         </div>
-        {session ? (
-          <div className="muted small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {session.user.username}
-            <button className="ghost" onClick={() => authStore.logout()}>
-              Déconnexion
-            </button>
-          </div>
-        ) : (
-          <button className="ghost" onClick={() => setShowAuth(true)}>
-            Se connecter
-          </button>
-        )}
       </header>
 
       <main>
