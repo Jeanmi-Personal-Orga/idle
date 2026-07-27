@@ -22,6 +22,7 @@ export const STATS: Record<
 export const PURITIES: {
   id: PurityId;
   name: string;
+  /** Multiplicateur de rareté de la formule de puissance (voir `itemPower`). */
   mult: number;
   color: string;
   /** Classe CSS du cadre et de son effet. */
@@ -34,46 +35,46 @@ export const PURITIES: {
     color: "#6e737d",
     frame: "f-trouble",
   },
-  { id: "clair", name: "Clair", mult: 2.4, color: "#cdd6dd", frame: "f-clair" },
+  { id: "clair", name: "Clair", mult: 1.5, color: "#cdd6dd", frame: "f-clair" },
   {
     id: "prismatique",
     name: "Prismatique",
-    mult: 6,
+    mult: 2.5,
     color: "#4fd6a0",
     frame: "f-prismatique",
   },
   {
     id: "ethere",
     name: "Éthéré",
-    mult: 15,
+    mult: 4,
     color: "#9b7fe0",
     frame: "f-ethere",
   },
   {
     id: "quintessence",
     name: "Quintessence",
-    mult: 38,
+    mult: 7,
     color: "#e8a33d",
     frame: "f-quintessence",
   },
   {
     id: "absolu",
     name: "Absolu",
-    mult: 95,
+    mult: 12,
     color: "#f2eee2",
     frame: "f-absolu",
   },
   {
     id: "demoniaque",
     name: "Démoniaque",
-    mult: 240,
+    mult: 20,
     color: "#e0455c",
     frame: "f-demoniaque",
   },
   {
     id: "divin",
     name: "Divin",
-    mult: 620,
+    mult: 35,
     color: "#ffd873",
     frame: "f-divin",
   },

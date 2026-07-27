@@ -1,4 +1,4 @@
-import { MISSION_REWARD, MISSION_WAVE_INTERVAL, PURITIES, SLOTS, purity, WAVES_PER_DISTRICT, districtAt, districtLabel, enemySprite, purityIndex, slotDef } from './content';
+import { MISSION_REWARD, MISSION_WAVE_INTERVAL, SLOTS, purity, WAVES_PER_DISTRICT, districtAt, districtLabel, enemySprite, purityIndex, slotDef } from './content';
 import {
   attackInterval,
   GOLD_OFFERS,
@@ -707,12 +707,9 @@ export function ascend(state: GameState): number {
  * secondaires au hasard, et les étoiles acquises.
  */
 function makeStarterItem(slot: SlotId, stars: number): Item {
-  const item = makeItem(slot, 1, Math.random, nextId(), NEUTRAL_MODS, stars);
-  item.purity = PURITIES[0].id;
-  item.level = 1;
-  const def = slotDef(slot);
-  item.main = { key: def.main, value: def.mainBase };
-  return item;
+  // Palier le plus bas et laboratoire 1 : la pièce ne tire sa valeur que de ses
+  // étoiles, ce qui rend le gain de la dissolution immédiatement lisible.
+  return makeItem(slot, 1, Math.random, nextId(), NEUTRAL_MODS, stars);
 }
 
 export function chooseCharacter(state: GameState, id: CharacterId) {
@@ -724,7 +721,7 @@ export function upgradeLab(state: GameState): boolean {
   const cost = labUpgradeCost(state.labLevel, state.ascension.count);
   if (state.resources.essence < cost.essence) return false;
   state.resources.essence -= cost.essence;
-  const total = labUpgradeDuration(state.labLevel);
+  const total = labUpgradeDuration(state.labLevel, state.ascension.count);
   state.labUpgrading = { remaining: total, total };
   return true;
 }
@@ -803,5 +800,8 @@ export function formatDuration(seconds: number): string {
   if (seconds < 60) return `${Math.ceil(seconds)}s`;
   const m = Math.floor(seconds / 60);
   if (m < 60) return `${m}m ${Math.floor(seconds % 60)}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ${m % 60}m`;
+  // Les derniers niveaux du laboratoire se comptent en jours : « 240h » ne se lit pas.
+  return `${Math.floor(h / 24)}j ${h % 24}h`;
 }

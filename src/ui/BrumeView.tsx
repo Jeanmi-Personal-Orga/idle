@@ -40,7 +40,7 @@ import { store, useGame } from "../game/store";
 import type { Item, PurityId, SlotId, StatKey } from "../game/types";
 import { Arena, FighterBar } from "./Arena";
 import { Cauldron } from "./Cauldron";
-import { ItemCard, PurityLegend, SlotIcon } from "./ItemCard";
+import { ItemCard, SlotIcon } from "./ItemCard";
 import { Sprite } from "./Sprite";
 import { Dropdown } from "./Filters";
 import { ResIcon } from "./ResIcon";
@@ -142,7 +142,7 @@ export function BrumeView() {
 /** Chaudron, en compact : même moteur que l'ancien onglet Laboratoire. */
 function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
   const cost = distillCost(state.labLevel);
-  const labCost = labUpgradeCost(state.labLevel);
+  const labCost = labUpgradeCost(state.labLevel, state.ascension.count);
   const mods = allMods(state);
   const d = state.distilling;
   /** Fiole pleine d'une sauvegarde antérieure au ramassage automatique. */
@@ -231,7 +231,7 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
               </div>
               <div className="statline">
                 <span className="muted">Durée</span>
-                <b>{formatDuration(labUpgradeDuration(state.labLevel))}</b>
+                <b>{formatDuration(labUpgradeDuration(state.labLevel, state.ascension.count))}</b>
               </div>
             </div>
 
@@ -597,7 +597,9 @@ function InfoPopup({ onClose }: { onClose: () => void }) {
             );
           })}
         </div>
-        <div className="label">Pureté attendue</div>
+        {/* Les chances de pureté sont chiffrées ici, palier par palier : c'est
+            la seule façon de savoir ce que vaut vraiment un niveau de plus. */}
+        <div className="label">Pureté · laboratoire {state.labLevel}</div>
         <div className="purity-bar">
           {PURITIES.map((p, i) => {
             const share = (weights[i] / totalWeight) * 100;
@@ -607,12 +609,24 @@ function InfoPopup({ onClose }: { onClose: () => void }) {
                 key={p.id}
                 className="purity-seg"
                 style={{ width: `${share}%`, background: p.color }}
-                title={`${p.name} ${share.toFixed(0)} %`}
+                title={`${p.name} ${share.toFixed(1)} %`}
               />
             );
           })}
         </div>
-        <PurityLegend />
+        <div className="grid2">
+          {PURITIES.map((p, i) => {
+            const share = (weights[i] / totalWeight) * 100;
+            return (
+              <div key={p.id} className="statline">
+                <span style={{ color: p.color }}>{p.name}</span>
+                <b className={share > 0 ? undefined : 'muted'}>
+                  {share >= 0.05 ? `${share.toFixed(1)} %` : '—'}
+                </b>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

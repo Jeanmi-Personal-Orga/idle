@@ -1,4 +1,5 @@
 import { WAVES_PER_DISTRICT } from './content';
+import { LAB_MAX } from './formulas';
 import type { GameState } from './types';
 
 /**
@@ -8,7 +9,13 @@ import type { GameState } from './types';
  */
 
 /** Niveau maximum du laboratoire : au-delà, il ne reste qu'à dissoudre. */
-export const LAB_MAX_LEVEL = 40;
+export const LAB_MAX_LEVEL = LAB_MAX;
+
+/**
+ * Cinq étoiles au plus. Au-delà, la taxe de 10 % par étoile sur le coût et la
+ * durée des travaux rendrait la remontée plus longue que ce qu'elle rapporte.
+ */
+export const MAX_STARS = 5;
 
 /** District à atteindre au moins une fois pour ouvrir la dissolution. */
 export const ASCEND_UNLOCK_DISTRICT = 2;
@@ -107,7 +114,8 @@ export function buyLegacyMax(state: GameState, id: string): number {
  * Condition unique et lisible : le laboratoire doit être au maximum. Tant qu'il
  * reste un niveau à bâtir, il y a mieux à faire que dissoudre.
  */
-export const canAscend = (state: GameState) => state.labLevel >= LAB_MAX_LEVEL;
+export const canAscend = (state: GameState) =>
+  state.labLevel >= LAB_MAX_LEVEL && state.ascension.count < MAX_STARS;
 
 export const hasUnlockedAscension = canAscend;
 

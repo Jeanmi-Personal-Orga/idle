@@ -2,6 +2,7 @@ import {
   PURITIES,
   SUBS_PER_ITEM,
   SUB_POOL,
+  purity,
   WAVES_PER_DISTRICT,
   districtAt,
   purityIndex,
@@ -30,22 +31,64 @@ const PERCENT_STATS: StatKey[] = [
 
 export const isPercent = (k: StatKey) => PERCENT_STATS.includes(k);
 
-/** Un objet gagne 14 % de Dégâts/Points de vie par niveau, 4 % sur le reste. */
-export const levelMult = (level: number, percent = false) =>
-  1 + (percent ? 0.04 : 0.14) * (level - 1);
-
-/** Le palier de pureté multiplie les pourcentages de façon très amortie. */
+/**
+ * Les statistiques secondaires sont des pourcentages : elles suivent la rareté de
+ * façon très amortie, sinon une pièce Divine dépasserait à elle seule le plafond
+ * de 100 % et les objectifs de composition perdraient tout sens.
+ */
 export const purityStatMult = (mult: number, percent: boolean) =>
-  percent ? Math.pow(mult, 0.42) : mult;
+  percent ? Math.pow(mult, 0.95) : mult;
 
-/** Chaque étoile vaut +60 % sur toute la pièce. */
-export const starMult = (stars: number) => 1 + 0.6 * stars;
+/**
+ * Multiplicateur global par étoile de dissolution. Table explicite et non
+ * formule : la marche entre 4 et 5 étoiles (×15 → ×30) est voulue, une
+ * exponentielle régulière ne la donnerait pas.
+ */
+const STAR_MULT = [1, 2, 4, 8, 15, 30];
 
+export const starMult = (stars: number) =>
+  STAR_MULT[Math.min(Math.max(0, stars), STAR_MULT.length - 1)];
+
+/**
+ * Puissance d'une pièce, telle que définie par le jeu :
+ *
+ *     (niveau du laboratoire × 10) × multiplicateur de rareté × multiplicateur d'étoiles
+ *
+ * C'est le budget que la pièce répartit ensuite sur sa statistique principale.
+ * Une pièce de niveau 1 à cinq étoiles vaut donc 300, soit trente fois ce que
+ * vaut la même pièce en première partie — c'est tout l'intérêt de dissoudre.
+ */
+export function itemPower(labLevel: number, purityId: PurityId, stars: number): number {
+  return labLevel * 10 * purity(purityId).mult * starMult(stars);
+}
+
+/**
+ * Part du budget de puissance qui revient à chaque emplacement. L'arme porte le
+ * plus, les bottes le moins ; les pièces défensives convertissent leur part en
+ * points de vie, qui se comptent en dizaines et non en unités.
+ */
+const SLOT_SHARE: Record<SlotId, number> = {
+  arme: 1,
+  objet: 0.6,
+  gants: 0.5,
+  bottes: 0.45,
+  veste: 1,
+  protection: 0.9,
+  casque: 0.75,
+  pantalon: 0.7,
+};
+
+/** Un point de puissance défensif vaut huit points de vie. */
+const HP_PER_POWER = 8;
+
+/**
+ * Statistiques d'une pièce. Aucun multiplicateur n'est appliqué ici : le niveau
+ * du laboratoire, la rareté et les étoiles sont déjà dans la valeur calculée à
+ * la fabrication (voir `itemPower`). Les remultiplier compterait deux fois.
+ */
 export function itemStats(item: Item): Stats {
   const out: Stats = {};
-  const stars = starMult(item.stars ?? 0);
-  const add = (k: StatKey, v: number) =>
-    (out[k] = (out[k] ?? 0) + v * levelMult(item.level, isPercent(k)) * stars);
+  const add = (k: StatKey, v: number) => (out[k] = (out[k] ?? 0) + v);
   add(item.main.key, item.main.value);
   for (const s of item.subs) add(s.key, s.value);
   return out;
@@ -183,36 +226,62 @@ export const upgradeCost = (item: Item, mods: TechMods = NEUTRAL_MODS) =>
   );
 
 /**
- * Améliorer le laboratoire ne demande que de l'essence : les matériaux servent à
- * fabriquer, pas à bâtir. Chaque étoile de dissolution renchérit les travaux de
- * 25 % — le niveau 1 à 30 essences coûte 37,5 à une étoile.
+ * Coût en essence pour **atteindre** chaque niveau du laboratoire, du 1 au 40.
+ * Table explicite plutôt que formule : la courbe est voulue par paliers de
+ * phases, et une exponentielle ne la reproduirait pas.
  */
-export const labUpgradeCost = (labLevel: number, stars = 0) => ({
-  essence: Math.ceil(30 * Math.pow(1.42, labLevel - 1) * Math.pow(1.25, stars)),
-});
+const LAB_COST_TABLE = [
+  0, 50, 120, 250, 500, 900, 1_500, 2_400, 3_800, 6_000, 9_500, 15_000, 23_000, 35_000, 52_000,
+  78_000, 115_000, 170_000, 250_000, 370_000, 550_000, 800_000, 1_200_000, 1_750_000, 2_500_000,
+  3_600_000, 5_200_000, 7_500_000, 10_500_000, 15_000_000, 21_000_000, 30_000_000, 42_000_000,
+  60_000_000, 85_000_000, 120_000_000, 170_000_000, 240_000_000, 350_000_000, 500_000_000,
+];
+
+/** Durée des travaux pour atteindre chaque niveau, en secondes. */
+const LAB_TIME_TABLE = [
+  0, 10, 30, 60, 180, 300, 600, 900, 1_800, 3_600, 5_400, 7_200, 10_800, 14_400, 21_600, 28_800,
+  36_000, 43_200, 57_600, 72_000, 86_400, 100_800, 115_200, 129_600, 172_800, 194_400, 216_000,
+  237_600, 259_200, 302_400, 345_600, 388_800, 432_000, 475_200, 518_400, 561_600, 604_800,
+  691_200, 777_600, 864_000,
+];
+
+/** Niveau maximum du laboratoire, imposé par la table. */
+export const LAB_MAX = LAB_COST_TABLE.length;
+
+/** Chaque étoile de dissolution renchérit les travaux, et les allonge, de 10 %. */
+export const STAR_TAX = 0.1;
 
 /**
- * Durée des travaux : quelques secondes au début, plusieurs heures en fin de
- * parcours. C'est cette attente que les sabliers permettent de sauter.
+ * Coût des travaux pour passer de `labLevel` au suivant. Les matériaux servent à
+ * fabriquer, pas à bâtir : seule l'essence est demandée.
  */
-export const labUpgradeDuration = (labLevel: number) =>
-  Math.round(10 * Math.pow(1.28, labLevel - 1));
+export const labUpgradeCost = (labLevel: number, stars = 0) => ({
+  essence: Math.ceil(
+    (LAB_COST_TABLE[Math.min(labLevel, LAB_MAX - 1)] ?? 0) * (1 + STAR_TAX * stars),
+  ),
+});
+
+/** Durée des mêmes travaux, allongée de 10 % par étoile. */
+export const labUpgradeDuration = (labLevel: number, stars = 0) =>
+  Math.round((LAB_TIME_TABLE[Math.min(labLevel, LAB_MAX - 1)] ?? 0) * (1 + STAR_TAX * stars));
 
 /**
  * Ce que le comptoir vend contre des sacs d'or. Pas de temps ici : le temps
  * s'achète depuis l'écran qui attend (laboratoire, recherche).
  */
-export const GOLD_OFFERS: { resource: 'essence' | 'reagent' | 'insight'; amount: number; base: number }[] = [
+export const GOLD_OFFERS: {
+  resource: 'essence' | 'reagent' | 'insight';
+  amount: number;
+  base: number;
+}[] = [
   { resource: 'reagent', amount: 10, base: 8 },
   { resource: 'essence', amount: 250, base: 12 },
   { resource: 'insight', amount: 5, base: 25 },
 ];
 
 /** Le prix monte avec ce qu'on possède déjà : le comptoir dépanne, il ne nourrit pas. */
-export const goldOfferCost = (
-  offer: { base: number; amount: number },
-  owned: number,
-) => Math.ceil(offer.base * (1 + owned / (offer.amount * 12)));
+export const goldOfferCost = (offer: { base: number; amount: number }, owned: number) =>
+  Math.ceil(offer.base * (1 + owned / (offer.amount * 12)));
 
 /**
  * Prix en sacs d'or pour supprimer une attente. Il suit la durée restante : on
@@ -228,16 +297,66 @@ export const distillDuration = (labLevel: number, mods: TechMods = NEUTRAL_MODS)
   Math.min(3, Math.max(2, 3 * Math.pow(0.94, labLevel - 1) * mods.distillMult));
 
 /**
- * Poids de tirage des paliers de pureté. Le laboratoire déplace la courbe vers
- * le haut : les paliers bas s'effacent au lieu de simplement se diluer.
+ * Probabilités de pureté par niveau de laboratoire, en pourcentage, dans l'ordre
+ * Trouble → Divin. Chaque ligne fait 100.
+ *
+ * Table explicite, et non courbe calculée : les paliers de déblocage (le
+ * Prismatique au 2, l'Éthéré au 5, le Divin au 25) et les disparitions (le
+ * Trouble au 19, le Clair au 30) sont des décisions de design, pas le produit
+ * d'une gaussienne.
+ */
+const PURITY_TABLE: number[][] = [
+  [85, 15, 0, 0, 0, 0, 0, 0],
+  [78, 21.5, 0.5, 0, 0, 0, 0, 0],
+  [70, 28.8, 1.2, 0, 0, 0, 0, 0],
+  [62, 35.5, 2.5, 0, 0, 0, 0, 0],
+  [55, 40.5, 4, 0.5, 0, 0, 0, 0],
+  [48, 45, 6, 1, 0, 0, 0, 0],
+  [42, 48.2, 8, 1.8, 0, 0, 0, 0],
+  [36, 51, 10.3, 2.7, 0, 0, 0, 0],
+  [30, 53.2, 13, 3.8, 0, 0, 0, 0],
+  [25, 54, 15.5, 5, 0.5, 0, 0, 0],
+  [20, 55, 17.8, 6.2, 1, 0, 0, 0],
+  [16, 55.2, 20, 7.3, 1.5, 0, 0, 0],
+  [12, 55, 22, 8.8, 2.2, 0, 0, 0],
+  [8, 54, 24, 10.5, 3.5, 0, 0, 0],
+  [5, 52, 25.8, 12, 5, 0.2, 0, 0],
+  [3, 49, 27.5, 13.5, 6.5, 0.5, 0, 0],
+  [1.5, 45, 29, 15, 8.5, 1, 0, 0],
+  [0.5, 41, 30, 16.5, 10.2, 1.8, 0, 0],
+  [0, 37, 30.5, 18, 12, 2.5, 0, 0],
+  [0, 33, 30, 19.3, 13.5, 4, 0.2, 0],
+  [0, 29, 29, 20.5, 15, 5.8, 0.7, 0],
+  [0, 25, 28, 21.5, 16.5, 7.5, 1.5, 0],
+  [0, 21, 27, 22, 18, 9.5, 2.5, 0],
+  [0, 17, 25.5, 22.5, 19.5, 11.5, 4, 0],
+  [0, 13, 24, 22.5, 20.8, 13.5, 6, 0.2],
+  [0, 10, 22, 22, 22, 15.5, 8, 0.5],
+  [0, 7, 20, 21, 23, 17.5, 10.5, 1],
+  [0, 4, 18, 19.5, 23.5, 19.5, 13.5, 2],
+  [0, 2, 16, 17.5, 23.8, 21.2, 16, 3.5],
+  [0, 0, 14, 15, 23.5, 22.5, 19, 6],
+  [0, 0, 11, 13, 22, 24, 21, 9],
+  [0, 0, 8, 11, 20, 25, 23, 13],
+  [0, 0, 5, 8.5, 17.5, 25.5, 25.5, 18],
+  [0, 0, 3, 6, 14, 25, 28, 24],
+  [0, 0, 1, 4, 10, 23, 31, 31],
+  [0, 0, 0, 2, 7, 20, 33, 38],
+  [0, 0, 0, 0, 4, 15, 36, 45],
+  [0, 0, 0, 0, 2, 10, 36, 52],
+  [0, 0, 0, 0, 0, 5, 35, 60],
+  [0, 0, 0, 0, 0, 0, 30, 70],
+];
+
+/**
+ * Probabilités de pureté à un niveau donné. Les bonus de recherche et de legs
+ * (`purityBias`) font **lire la table plus haut** : un bias de 3 donne les
+ * chances du niveau 3 au-dessus, sans jamais dépasser la dernière ligne.
  */
 export function purityWeights(labLevel: number, mods: TechMods = NEUTRAL_MODS): number[] {
-  const center = (labLevel - 1) * 0.16 + mods.purityBias;
-  return PURITIES.map((_, i) => {
-    const d = i - center;
-    const w = Math.exp(-(d * d) / 1.1);
-    return i > center + 2.5 ? 0 : w;
-  });
+  const row = Math.round(labLevel + mods.purityBias);
+  const index = Math.min(PURITY_TABLE.length, Math.max(1, row)) - 1;
+  return PURITY_TABLE[index];
 }
 
 // --- Génération d'objets ---------------------------------------------------
@@ -281,10 +400,15 @@ export function makeItem(
     subs.push({ key, value: round(subStatBase(key) * scale * (0.7 + rng() * 0.6)) });
   }
 
-  // Le niveau sort de la fabrication, il n'est plus toujours 1 : le laboratoire
-  // et la recherche repoussent le plafond, sans jamais dépasser 100.
-  const ceiling = itemLevelCeiling(labLevel, mods);
-  const level = 1 + Math.floor(rng() * ceiling);
+  // Le niveau d'une pièce est celui du laboratoire qui l'a produite — la
+  // recherche (« Moules affinés ») en offre quelques-uns de plus. C'est ce
+  // niveau qui entre dans la formule de puissance.
+  const level = Math.min(ITEM_LEVEL_MAX, labLevel + Math.floor(mods.itemLevelBonus / 4));
+
+  // Budget de puissance de la pièce, réparti selon l'emplacement. Les pièces
+  // défensives le convertissent en points de vie.
+  const budget = itemPower(level, p, stars) * SLOT_SHARE[slot] * jitter;
+  const mainValue = def.main === 'health' ? budget * HP_PER_POWER : budget;
 
   return {
     id,
@@ -294,25 +418,14 @@ export function makeItem(
     ranged: slot === 'arme' ? rng() < 0.34 : undefined,
     slot,
     purity: p,
-    level: Math.min(ITEM_LEVEL_MAX, level),
-    main: {
-      key: def.main,
-      value: round(def.mainBase * purityStatMult(mult, isPercent(def.main)) * jitter),
-    },
+    level,
+    main: { key: def.main, value: round(mainValue) },
     subs,
   };
 }
 
-/** Niveau maximum qu'une pièce peut atteindre, toutes sources confondues. */
-export const ITEM_LEVEL_MAX = 100;
-
-/**
- * Plafond de niveau à la fabrication : le laboratoire le repousse, la recherche
- * (`itemLevelBonus`) aussi. Un laboratoire neuf ne sort que du petit niveau.
- */
-export function itemLevelCeiling(labLevel: number, mods: TechMods = NEUTRAL_MODS): number {
-  return Math.min(ITEM_LEVEL_MAX, Math.floor(3 + labLevel * 2.2 + mods.itemLevelBonus));
-}
+/** Niveau maximum d'une pièce : celui du laboratoire, qui plafonne à 40. */
+export const ITEM_LEVEL_MAX = LAB_MAX;
 
 /** Valeur de référence d'une secondaire au palier Trouble. */
 function subStatBase(key: StatKey): number {
