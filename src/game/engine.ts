@@ -23,12 +23,12 @@ import {
 import { ascMods, canAscend, shardGain } from './ascension';
 import { mods as allMods } from './modifiers';
 import { NEUTRAL_MODS, advanceResearch, insightReward } from './tech';
-import { campaignDef, type Campaign } from './campaigns';
+import { KEYS_PER_DAY, campaignDef, campaignDepth, type Campaign } from './campaigns';
 import { spriteStyle } from './characters';
 import type { CharacterId } from './characters';
 import type { Enemy, GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 
 /**
  * Temps qu'il faut pour traverser toute l'arène, en secondes. Les deux camps
@@ -109,20 +109,51 @@ export function makeEnemies(district: number, wave: number, damageMult = 1): Ene
  * annoncée par la campagne, avec ses propres noms et sprites : la difficulté
  * reste comparable à celle d'un chapitre connu.
  */
-export function makeCampaignEnemies(campaign: Campaign, wave: number, damageMult = 1): Enemy[] {
+export function makeCampaignEnemies(
+  campaign: Campaign,
+  wave: number,
+  deepest: number,
+  damageMult = 1,
+): Enemy[] {
   const last = wave >= campaign.waves;
   const scale = last ? 2.2 : 1;
   const name = last ? `${campaign.enemies[2]} (gardien)` : campaign.enemies[wave % 2];
   const sprite = last ? campaign.sprites[2] : campaign.sprites[wave % 2];
-  return [buildEnemy(campaign.depth, wave, damageMult, scale, name, sprite)];
+  return [buildEnemy(campaignDepth(campaign, deepest), wave, damageMult, scale, name, sprite)];
+}
+
+/** Date locale, au format court : sert de repère pour la recharge des clés. */
+export function today(): string {
+  return new Date().toLocaleDateString('fr-CA');
+}
+
+/**
+ * Remet les clés à neuf si le jour a changé. Appelé au chargement et avant toute
+ * dépense, pour qu'une partie laissée ouverte la nuit voie ses clés revenir.
+ */
+export function refreshKeys(state: GameState) {
+  const day = today();
+  if (!state.keys || state.keys.day !== day) {
+    state.keys = { left: KEYS_PER_DAY, day };
+  }
 }
 
 /** Entre en campagne : le combat quitte le chapitre pour ses vagues à elle. */
 export function startCampaign(state: GameState, id: string): boolean {
   const campaign = campaignDef(id);
   if (!campaign || state.combat.campaign) return false;
+  // Une clé par tentative, trois par jour : c'est ce qui empêche de farmer une
+  // campagne en boucle et donne du poids au choix de laquelle faire.
+  refreshKeys(state);
+  if (state.keys.left < 1) return false;
+  state.keys.left -= 1;
   state.combat.campaign = { id, wave: 1 };
-  state.combat.enemies = makeCampaignEnemies(campaign, 1, allMods(state).enemyDamageMult);
+  state.combat.enemies = makeCampaignEnemies(
+    campaign,
+    1,
+    state.ascension.deepest,
+    allMods(state).enemyDamageMult,
+  );
   state.combat.closing = closingTime(state);
   state.combat.hero.hp = heroStats(state).health;
   pushLog(state, `Campagne : ${campaign.name}. ${campaign.waves} vagues, tout ou rien.`);
@@ -152,6 +183,7 @@ export function newGame(): GameState {
     tech: {},
     ascension: { count: 0, legacies: {}, deepest: 0 },
     pendingContract: null,
+    keys: { left: KEYS_PER_DAY, day: today() },
     equipped: {},
     stash: [],
     distilling: null,
@@ -349,7 +381,12 @@ function onWaveCleared(state: GameState, rng: () => number) {
       return;
     }
     c.campaign.wave += 1;
-    c.enemies = makeCampaignEnemies(campaign, c.campaign.wave, mods.enemyDamageMult);
+    c.enemies = makeCampaignEnemies(
+      campaign,
+      c.campaign.wave,
+      state.ascension.deepest,
+      mods.enemyDamageMult,
+    );
     c.hero.cooldown = 0;
     c.closing = closingTime(state);
     return;

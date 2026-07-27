@@ -157,6 +157,11 @@ export interface GameState {
    * seule : un bouton la réclame, sinon un gain silencieux passe inaperçu.
    */
   pendingContract: { essence: number; reagent: number; insight: number } | null;
+  /**
+   * Clés de campagne : trois par jour, remises à neuf au changement de date
+   * locale. Elles bornent le farm des campagnes sans imposer de minuterie.
+   */
+  keys: { left: number; day: string };
   equipped: Partial<Record<SlotId, Item>>;
   stash: Item[];
   distilling: Distillation | null;

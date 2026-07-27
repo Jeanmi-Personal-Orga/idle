@@ -6,11 +6,14 @@ import {
   makeEnemies,
   newGame,
   pushLog,
+  refreshKeys,
+  today,
   startRandomDistillation,
   step,
   type CombatEvent,
 } from './engine';
 import { distillCost } from './formulas';
+import { KEYS_PER_DAY } from './campaigns';
 import { enemySprite } from './content';
 import { CHARACTERS, DEFAULT_CHARACTER } from './characters';
 import type { Enemy, GameState } from './types';
@@ -57,6 +60,8 @@ class GameStore {
   constructor() {
     this.state = load() ?? newGame();
     applyOffline(this.state);
+    // Les clés reviennent même si la partie est restée ouverte toute la nuit.
+    refreshKeys(this.state);
   }
 
   subscribe = (fn: () => void) => {
@@ -285,6 +290,11 @@ export function migrate(save: GameState): GameState | null {
     // v13 : campagnes.
     save.combat.campaign = null;
     save.version = 13;
+  }
+  if (save.version === 13) {
+    // v14 : clés de campagne, trois par jour.
+    save.keys = { left: KEYS_PER_DAY, day: today() };
+    save.version = 14;
   }
   return save.version === SAVE_VERSION ? save : null;
 }

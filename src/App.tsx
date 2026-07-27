@@ -16,13 +16,11 @@ import type { GameState } from './game/types';
 type Tab = 'brume' | 'camp' | 'tech' | 'shop' | 'ascend';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'shop', label: 'Boutique', icon: '💰' },
   { id: 'brume', label: 'Brume', icon: '☁' },
   { id: 'camp', label: 'Campagnes', icon: '🗺' },
   { id: 'tech', label: 'Recherche', icon: '◇' },
-  { id: 'shop', label: 'Boutique', icon: '💰' },
-  // ♻ plutôt que ⚗ : l'alambic est déjà celui du laboratoire, et dissoudre
-  // c'est refondre pour repartir.
-  { id: 'ascend', label: 'Dissolution', icon: '♻' },
+  { id: 'ascend', label: 'Dissolution', icon: '★' },
 ];
 
 /**
@@ -106,7 +104,7 @@ export default function App() {
 
       <main>
         {tab === 'brume' && <BrumeView />}
-        {tab === 'camp' && <CampaignView />}
+        {tab === 'camp' && <CampaignView onStarted={() => setTab('brume')} />}
         {tab === 'tech' && <TechView />}
         {tab === 'shop' && <ShopView />}
         {tab === 'ascend' && <AscendView />}

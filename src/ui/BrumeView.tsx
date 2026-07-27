@@ -38,6 +38,7 @@ import { mods as allMods, type Mods } from "../game/modifiers";
 import { DEFAULT_CHARACTER } from "../game/characters";
 import { store, useGame } from "../game/store";
 import type { Item, PurityId, SlotId, StatKey } from "../game/types";
+import { campaignDef } from "../game/campaigns";
 import { Arena, FighterBar } from "./Arena";
 import { Cauldron } from "./Cauldron";
 import { ItemCard, PurityLegend, SlotIcon } from "./ItemCard";
@@ -62,6 +63,7 @@ export function BrumeView() {
   const c = state.combat;
   const s = heroStats(state);
   const dead = c.reviving > 0;
+  const campaign = c.campaign ? campaignDef(c.campaign.id) : undefined;
   const [showInfo, setShowInfo] = useState(false);
   const [showMissions, setShowMissions] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -72,12 +74,25 @@ export function BrumeView() {
       <div className={`card scene ${dead ? "lantern-out" : ""}`}>
         <div className="row between">
           <div>
-            <div className="label">{districtLabel(c.district)}</div>
-            <div className="muted small">
-              Vague {c.wave} / {WAVES_PER_DISTRICT}
-              {c.wave === WAVES_PER_DISTRICT && " · gardien"}
-              {c.enemies.length > 1 && ` · ${c.enemies.length} ennemis`}
-            </div>
+            {/* En campagne, la scène annonce la campagne : sinon on croit se
+                battre dans le chapitre et on ne comprend pas l'enjeu. */}
+            {campaign ? (
+              <>
+                <div className="label">🗺 {campaign.name}</div>
+                <div className="muted small">
+                  Vague {c.campaign!.wave} / {campaign.waves} · récompense à la dernière
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="label">{districtLabel(c.district)}</div>
+                <div className="muted small">
+                  Vague {c.wave} / {WAVES_PER_DISTRICT}
+                  {c.wave === WAVES_PER_DISTRICT && " · gardien"}
+                  {c.enemies.length > 1 && ` · ${c.enemies.length} ennemis`}
+                </div>
+              </>
+            )}
           </div>
           <div className="right">
             <div className="row">

@@ -161,6 +161,17 @@ export function waveReward(district: number, wave: number) {
   };
 }
 
+/**
+ * Puissance recommandée face à une vague : la même moyenne géométrique que celle
+ * du héros, appliquée aux chiffres de l'ennemi. Les deux valeurs se comparent
+ * donc directement — au-dessus, ça passe ; en dessous, on encaisse mal.
+ */
+export function recommendedPower(district: number, wave: number, scale = 1): number {
+  const hp = enemyHp(district, wave) * scale;
+  const dps = (enemyDamage(district, wave) * scale) / enemyInterval();
+  return Math.round(Math.sqrt(dps * hp) * 1.35);
+}
+
 // --- Coûts -----------------------------------------------------------------
 
 export const upgradeCost = (item: Item, mods: TechMods = NEUTRAL_MODS) =>
