@@ -107,26 +107,34 @@ au même endroit. Toutes les animations sont désactivées sous
 
 ### L'arène
 
-Les deux combattants sont sur **une seule scène**, et la distance s'y joue :
+Les deux combattants sont sur **une seule scène**, devant un décor de forêt en
+cinq couches. Le déroulé d'une vague :
 
-- au corps à corps, on traverse l'arène pour frapper puis on recule ;
-- à distance, on reste chez soi et on projette une fiole — sa couleur est celle
-  du palier du Flacon équipé ;
-- si l'un est au contact et l'autre à distance, c'est **celui au contact qui se
-  déplace**, jusqu'à la position de l'autre ; si les deux sont au contact, ils se
-  rejoignent à mi-chemin.
+1. l'ennemi sort de la brume à droite, le héros attend à gauche ;
+2. ceux qui se battent au contact **marchent l'un vers l'autre** — à mi-chemin si
+   les deux avancent, jusqu'à l'autre si un seul avance ;
+3. arrivés au contact ils y restent et échangent les coups jusqu'à la mort.
 
-La distance parcourue est mesurée dans le DOM, pas fixée en pourcentage : les
-gabarits de sprites diffèrent (un rat de cale fait 112 × 64, un contremaître
-160 × 208). Au-delà d'une frappe toutes les 0,9 s, l'aller-retour devient
-illisible : le combattant reste alors au contact entre deux coups.
+La marche est lente et régulière : 46 px/s, soit ~1,6 s pour traverser. La durée
+vient de la distance, pas d'un délai fixe, sinon les longues distances se
+téléportent. Les à-coups de combat, eux, sont courts et secs (110 ms).
 
-C'est de la **mise en scène** : le déplacement suit le rythme réel des attaques
-mais ne change aucun résultat. L'équilibrage simulé sur 72 h reste intact.
+Un combattant à distance ne bouge jamais : c'est l'autre qui vient le chercher.
+Les quatre personnages jouables sont au contact, donc ce sont les bestioles
+volantes — araignée, abeille — qui obligent le joueur à traverser.
 
-Les sept animations livrées servent toutes : `walk` pendant l'approche (pour qui
-en a une), `attack`/`throw` à l'impact, `pour` une frappe sur quatre, `hurt`
-quand un coup porte, `death` puis `revive` pendant la réanimation.
+Quand un coup porte, on le voit : la cible blanchit une fraction de seconde, un
+éclat s'ouvre au point d'impact, la cible recule de quelques pixels, le chiffre
+de dégâts monte et s'efface, et la scène tremble quand c'est le joueur qui
+encaisse.
+
+C'est de la **mise en scène** : le moteur ne connaît que des cadences de frappe,
+le déplacement les suit sans changer aucun résultat. L'équilibrage simulé sur
+72 h reste intact.
+
+Trois couches de `transform` séparées — le slot place, le `mover` déplace, la
+boîte du sprite joue l'entrée en scène — pour qu'aucune animation n'en écrase
+une autre.
 
 ### Choix du personnage
 

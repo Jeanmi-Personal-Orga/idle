@@ -322,11 +322,73 @@ main {
 
 /*
  * Trois couches de transform, une par responsabilité : le slot place, le
- * `mover` déplace, la boîte du sprite joue l'entrée dans la brume. Les empiler
- * sur un même élément ferait qu'une animation en écrase une autre.
+ * `mover` déplace, la boîte du sprite joue l'entrée en scène. Les empiler sur un
+ * même élément ferait qu'une animation en écrase une autre.
+ * La durée et la courbe sont pilotées en ligne : marche longue et régulière,
+ * à-coups de combat courts et secs.
  */
 .mover {
-  transition: transform 0.19s ease-in-out;
+  position: relative;
+  transition-property: transform;
+}
+
+/* --- Impacts : sans eux, on ne voit pas les coups porter --- */
+
+/* La cible blanchit une fraction de seconde. */
+@keyframes flash-hit {
+  0% {
+    filter: brightness(4) saturate(0.2);
+  }
+  100% {
+    filter: none;
+  }
+}
+
+.sprite-box.flash {
+  animation: flash-hit 0.15s ease-out;
+}
+
+/* Éclat au point de contact. */
+@keyframes burst {
+  0% {
+    transform: translate(-50%, -50%) scale(0.3);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.6);
+    opacity: 0;
+  }
+}
+
+.impact {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  width: 34px;
+  height: 34px;
+  pointer-events: none;
+  border-radius: 99px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 30%, rgba(255, 240, 190, 0) 70%);
+  animation: burst 0.16s ease-out forwards;
+  z-index: 3;
+}
+
+/* La scène tremble quand c'est le joueur qui encaisse. */
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+.arena.shaken {
+  animation: shake 0.16s ease-in-out;
 }
 
 /* Fioles en vol : la couleur vient du palier du Flacon équipé (§2). */
@@ -563,7 +625,7 @@ main {
 
 .hit {
   position: absolute;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--glass-2);
@@ -574,7 +636,7 @@ main {
 
 /* Rien d'autre ne clignote pendant le combat : seuls les critiques ressortent. */
 .hit.crit {
-  font-size: 18px;
+  font-size: 21px;
   color: #ffd964;
 }
 

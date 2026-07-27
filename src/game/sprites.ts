@@ -42,7 +42,7 @@ function character(file: string): Record<string, SpriteAnim> {
   const sheet = `/sprites/chars/${file}.png`;
   return {
     idle: row(sheet, 0, 3, 5),
-    walk: row(sheet, 1, 4, 9),
+    walk: row(sheet, 1, 4, 6),
     run: row(sheet, 2, 4, 12),
     attack: row(sheet, 3, 7, 14, false),
     attack2: row(sheet, 4, 9, 14, false),

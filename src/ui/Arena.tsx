@@ -1,42 +1,45 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { WAVES_PER_DISTRICT, cycleOf, enemySprite, purity } from '../game/content';
-import { BACKGROUND_LAYERS } from '../game/sprites';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
+import { WAVES_PER_DISTRICT, cycleOf, enemySprite } from '../game/content';
 import { formatNum } from '../game/engine';
-import { attackInterval, heroStats } from '../game/formulas';
+import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
 import { Sprite } from './Sprite';
 
 /**
- * L'arène : **une seule scène** où les deux combattants se font face, et où la
- * distance se joue vraiment.
+ * L'arène : une seule scène, où la distance se joue vraiment.
  *
- * - au corps à corps, le combattant traverse l'arène pour frapper puis recule ;
- * - à distance, il reste chez lui et projette une fiole ;
- * - si l'un est au contact et l'autre non, c'est celui au contact qui se
- *   déplace — jusqu'à la position de l'autre, pas jusqu'au milieu.
+ * Déroulé d'une vague :
+ * 1. l'ennemi sort de la brume à droite, le héros attend à gauche ;
+ * 2. ceux qui se battent au contact **marchent l'un vers l'autre** — à mi-chemin
+ *    si les deux avancent, jusqu'à l'autre si un seul avance ;
+ * 3. arrivés au contact ils y restent, et échangent les coups jusqu'à la mort.
  *
- * Tout ceci est de la mise en scène : la simulation, elle, ne connaît que des
- * cadences de frappe. Le déplacement suit le rythme réel des attaques mais ne
- * change aucun résultat — l'équilibrage validé sur 72 h reste intact.
+ * Le combattant à distance ne bouge jamais : c'est l'autre qui vient le
+ * chercher. La marche dure le temps de parcourir la distance, à vitesse
+ * constante — pas une durée fixe, sinon les longues distances se téléportent.
+ *
+ * Tout ceci est de la mise en scène : la simulation ne connaît que des cadences
+ * de frappe, le déplacement les suit sans changer aucun résultat.
  */
 
-/** Marge laissée entre deux corps qui se touchent. */
-const CONTACT_GAP = 10;
-
-type Phase = 'idle' | 'approach' | 'strike' | 'return';
+/** Marge laissée entre deux corps au contact. */
+const CONTACT_GAP = 6;
+/**
+ * Vitesse de marche, en pixels par seconde. Volontairement lente : on doit voir
+ * les deux se rapprocher, pas les voir glisser d'un bloc.
+ */
+const WALK_SPEED = 46;
 
 export function Arena() {
   const state = useGame();
   const c = state.combat;
-  const s = heroStats(state);
 
   const hero = state.character ?? DEFAULT_CHARACTER;
   const sprite = enemySprite(c.district, c.wave);
   // « Écho de soi » du Puits Prismatique : l'ennemi est le sprite du joueur.
   const foe = sprite === 'self' ? hero : sprite;
 
-  // Le gardien de fin de district domine physiquement la piétaille.
   const guardian = c.wave === WAVES_PER_DISTRICT;
   const heroStyle = spriteStyle(hero);
   const foeStyle = spriteStyle(foe);
@@ -47,26 +50,35 @@ export function Arena() {
   const foeRef = useRef<HTMLDivElement>(null);
   const gap = useGap(arenaRef, heroRef, foeRef, [c.district, c.wave, hero, foe]);
 
-  // Au-delà d'une certaine cadence, faire l'aller-retour à chaque coup devient
-  // illisible : le combattant reste alors au contact.
-  const heroFast = attackInterval(s) < 0.9;
-  const heroPhase = useAttackPhase(store.heroSwings, heroFast, dead);
-  const foePhase = useAttackPhase(store.foeSwings, c.enemy.interval < 0.9, dead);
-  // Encaisser se voit : brève grimace au moment où le coup adverse porte.
-  const heroHurt = usePulse(store.foeSwings, 260) && !dead;
-  const foeHurt = usePulse(store.hits.at(-1)?.id ?? 0, 180);
-
-  // Qui se déplace, et de combien. Un combattant à distance ne bouge jamais ;
-  // deux combattants au contact se rejoignent à mi-chemin.
+  // Qui marche, et jusqu'où. Un combattant à distance reste sur place.
   const bothMelee = heroStyle === 'melee' && foeStyle === 'melee';
   const heroTravel = heroStyle === 'melee' ? (bothMelee ? gap / 2 : gap) : 0;
   const foeTravel = foeStyle === 'melee' ? (bothMelee ? gap / 2 : gap) : 0;
+  const walkMs = Math.max(400, (Math.max(heroTravel, foeTravel) / WALK_SPEED) * 1000);
 
-  const heroShift = engaged(heroPhase) ? heroTravel : 0;
-  const foeShift = engaged(foePhase) ? -foeTravel : 0;
+  // Chaque nouvelle vague renvoie tout le monde à sa place, puis on remarche.
+  const closed = useApproach(`${c.district}-${c.wave}`, dead);
+
+  const heroWalking = !dead && !closed && heroTravel > 0;
+  const foeWalking = !dead && !closed && foeTravel > 0;
+
+  // Frappes : impulsion vers l'adversaire au moment du coup.
+  const heroStrike = usePulse(store.heroSwings, 220) && !dead;
+  const foeStrike = usePulse(store.foeSwings, 220) && !dead;
+  // Impacts : la cible encaisse — éclat blanc et léger recul.
+  const foeHit = usePulse(store.hits.at(-1)?.id ?? 0, 150);
+  const heroHit = usePulse(store.foeSwings, 170) && !dead;
+
+  const heroAt = dead ? 0 : closed ? heroTravel : 0;
+  const foeAt = dead ? 0 : closed ? foeTravel : 0;
+  const heroX = heroAt + (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
+  const foeX = -(foeAt + (foeStrike ? 7 : 0) - (foeHit ? 5 : 0));
+  // La marche est lente et régulière ; les à-coups de combat sont brefs et secs.
+  const heroMoving = heroWalking || (closed && !heroStrike && !heroHit);
+  const foeMoving = foeWalking || (closed && !foeStrike && !foeHit);
 
   return (
-    <div className="arena" ref={arenaRef}>
+    <div className={`arena ${heroHit ? 'shaken' : ''}`} ref={arenaRef}>
       {/* Décor en cinq couches, de la plus lointaine à la plus proche. */}
       {BACKGROUND_LAYERS.map((src, i) => (
         <div
@@ -75,161 +87,102 @@ export function Arena() {
           aria-hidden="true"
           style={{
             backgroundImage: `url(${src})`,
-            // Les couches proches défilent un peu plus que les lointaines.
             transform: `translateX(${(i - 2) * 4}px) scale(${1 + i * 0.02})`,
           }}
         />
       ))}
 
       <div className="fighter-slot hero" ref={heroRef}>
-        <div className="mover" style={{ transform: `translateX(${heroShift}px)` }}>
+        <div
+          className="mover"
+          style={{
+            transform: `translateX(${heroX}px)`,
+            transitionDuration: heroMoving ? `${walkMs}ms` : '110ms',
+            transitionTimingFunction: heroMoving ? 'linear' : 'ease-out',
+          }}
+        >
           <Sprite
             character={hero}
-            anim={heroAnim(heroPhase, dead, c.reviving, heroHurt, heroStyle, store.heroSwings)}
-            fallbackAnim={heroFallback(heroPhase, heroStyle)}
+            anim={heroAnim(dead, c.reviving, heroWalking, heroStrike, heroHit)}
+            fallbackAnim={['idle']}
+            className={heroHit ? 'flash' : ''}
           />
+          {heroHit && <span className="impact" aria-hidden="true" />}
         </div>
       </div>
 
       <div className="fighter-slot foe" ref={foeRef}>
-        <div className="mover" style={{ transform: `translateX(${foeShift}px)` }}>
+        <div
+          className="mover"
+          style={{
+            transform: `translateX(${foeX}px)`,
+            transitionDuration: foeMoving ? `${walkMs}ms` : '110ms',
+            transitionTimingFunction: foeMoving ? 'linear' : 'ease-out',
+          }}
+        >
           <Sprite
             character={foe}
-            anim={foePhase === 'strike' ? 'attack' : foeHurt ? 'hurt' : 'idle'}
+            anim={foeAnim(foeWalking, foeStrike, foeHit)}
             fallbackAnim={['idle']}
             scale={guardian ? 1.3 : 1}
             flip
             className={`foe enter ${cycleOf(c.district) > 0 ? 'cycled' : ''} ${
               foeStyle === 'ranged' ? 'flyer' : ''
-            }`}
-            style={{ filter: districtTint(c.district) }}
+            } ${foeHit ? 'flash' : ''}`}
             key={`${c.district}-${c.wave}`}
           />
+          {/* L'éclat au point d'impact : sans lui, on ne voit pas le coup porter. */}
+          {foeHit && <span className="impact" aria-hidden="true" />}
+          <FloatingHits />
         </div>
-        <FloatingHits />
       </div>
 
-      {/* Projectiles : seule façon pour un combattant à distance de toucher. */}
-      {heroStyle === 'ranged' && (
-        <Projectiles
-          from="hero"
-          distance={gap}
-          swings={store.heroSwings}
-          color={purity(state.equipped.flacon?.purity ?? 'trouble').color}
-        />
-      )}
+      {/* Un ennemi à distance projette, puisqu'il ne s'approche jamais. */}
       {foeStyle === 'ranged' && (
-        <Projectiles from="foe" distance={gap} swings={store.foeSwings} color="#8fb6c4" />
+        <Projectiles distance={gap} swings={store.foeSwings} color="#9ad6c0" />
       )}
     </div>
   );
 }
 
-const engaged = (p: Phase) => p === 'approach' || p === 'strike';
-
-/**
- * Toutes les animations livrées finissent par servir : la mort puis le
- * relèvement pendant la réanimation, la grimace quand un coup porte, la marche
- * uniquement quand il y a une distance à parcourir, et un versement de réactif
- * une frappe sur quatre pour que l'attaque ne soit pas une boucle unique.
- */
 function heroAnim(
-  phase: Phase,
   dead: boolean,
   reviving: number,
-  hurt: boolean,
-  style: string,
-  swings: number,
+  walking: boolean,
+  striking: boolean,
+  hit: boolean,
 ): string {
   // La réanimation dure 3 s : il tombe, puis se relève sur la dernière seconde.
-  if (dead) return reviving < 1 ? 'revive' : 'death';
-  if (phase === 'strike') {
-    if (style === 'ranged') return swings % 4 === 3 ? 'pour' : 'throw';
-    return 'attack';
-  }
-  if (hurt) return 'hurt';
-  // Un combattant à distance ne se déplace pas : pas de marche sur place.
-  if (style === 'melee' && (phase === 'approach' || phase === 'return')) return 'walk';
+  if (dead) return reviving < 1 ? 'hurt' : 'death';
+  if (striking) return 'attack';
+  if (hit) return 'hurt';
+  if (walking) return 'walk';
   return 'idle';
 }
 
-/** Tous les personnages n'ont pas les sept animations de l'alchimiste. */
-function heroFallback(phase: Phase, style: string): string[] {
-  if (phase === 'strike') return style === 'ranged' ? ['attack', 'pour'] : ['throw'];
-  if (phase === 'approach' || phase === 'return') return ['idle'];
-  return ['idle'];
-}
-
-/** Chaque district repeint les mêmes habitants : la ville change sans asset neuf. */
-function districtTint(district: number): string {
-  if (district === 0) return 'none';
-  return `hue-rotate(${(district * 47) % 360}deg) saturate(1.15)`;
+function foeAnim(walking: boolean, striking: boolean, hit: boolean): string {
+  if (striking) return 'attack';
+  if (hit) return 'hurt';
+  if (walking) return 'walk';
+  return 'idle';
 }
 
 /**
- * Distance libre entre les deux combattants, mesurée dans le DOM : les gabarits
- * de sprites diffèrent, un pourcentage fixe placerait mal le point de contact.
+ * Vrai une fois la distance parcourue. Repart à faux à chaque nouvelle vague :
+ * le nouvel ennemi sort de la brume, et il faut de nouveau aller au contact.
  */
-function useGap(
-  arena: React.RefObject<HTMLDivElement | null>,
-  a: React.RefObject<HTMLDivElement | null>,
-  b: React.RefObject<HTMLDivElement | null>,
-  deps: unknown[],
-): number {
-  const [gap, setGap] = useState(0);
-
-  useLayoutEffect(() => {
-    const measure = () => {
-      const ra = a.current?.getBoundingClientRect();
-      const rb = b.current?.getBoundingClientRect();
-      if (!ra || !rb) return;
-      setGap(Math.max(0, rb.left - ra.right - CONTACT_GAP));
-    };
-    measure();
-    const el = arena.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-
-  return gap;
-}
-
-/** Durées de la chorégraphie, en millisecondes. */
-const APPROACH = 190;
-const STRIKE = 200;
-const RETURN = 220;
-
-/**
- * Traduit un compteur d'attaques en phases d'animation. `stayEngaged` garde le
- * combattant au contact entre deux coups quand la cadence est trop rapide pour
- * un aller-retour.
- */
-function useAttackPhase(swings: number, stayEngaged: boolean, dead: boolean): Phase {
-  const [phase, setPhase] = useState<Phase>('idle');
-  const seen = useRef(swings);
+function useApproach(waveKey: string, dead: boolean): boolean {
+  const [closed, setClosed] = useState(false);
 
   useEffect(() => {
-    if (dead) {
-      setPhase('idle');
-      return;
-    }
-    if (swings === seen.current) return;
-    seen.current = swings;
+    setClosed(false);
+    // Court délai : l'ennemi finit d'apparaître avant qu'on lui marche dessus.
+    const t = window.setTimeout(() => setClosed(true), 220);
+    return () => window.clearTimeout(t);
+  }, [waveKey]);
 
-    const timers: number[] = [];
-    setPhase('approach');
-    timers.push(window.setTimeout(() => setPhase('strike'), APPROACH));
-    if (!stayEngaged) {
-      timers.push(window.setTimeout(() => setPhase('return'), APPROACH + STRIKE));
-      timers.push(window.setTimeout(() => setPhase('idle'), APPROACH + STRIKE + RETURN));
-    }
-    return () => timers.forEach(window.clearTimeout);
-  }, [swings, stayEngaged, dead]);
-
-  return dead ? 'idle' : phase;
+  // À la mort, le héros retombe à sa place de départ.
+  return closed && !dead;
 }
 
 /** Vrai pendant `ms` après chaque incrément du compteur. */
@@ -248,14 +201,46 @@ function usePulse(counter: number, ms: number): boolean {
   return on;
 }
 
-/** Fioles en vol, du lanceur vers sa cible. */
+/**
+ * Distance libre entre les deux combattants, mesurée dans le DOM : les gabarits
+ * diffèrent (un rat n'est pas un chevalier) et un pourcentage fixe placerait mal
+ * le point de contact. On mesure les positions de départ, pas les rectangles
+ * déjà déplacés.
+ */
+function useGap(
+  arena: React.RefObject<HTMLDivElement | null>,
+  a: React.RefObject<HTMLDivElement | null>,
+  b: React.RefObject<HTMLDivElement | null>,
+  deps: unknown[],
+): number {
+  const [gap, setGap] = useState(0);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const ea = a.current;
+      const eb = b.current;
+      if (!ea || !eb) return;
+      const left = ea.offsetLeft + ea.offsetWidth;
+      setGap(Math.max(0, eb.offsetLeft - left - CONTACT_GAP));
+    };
+    measure();
+    const el = arena.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return gap;
+}
+
+/** Projectiles d'un ennemi à distance, vers le héros. */
 function Projectiles({
-  from,
   distance,
   swings,
   color,
 }: {
-  from: 'hero' | 'foe';
   distance: number;
   swings: number;
   color: string;
@@ -272,14 +257,14 @@ function Projectiles({
   }, [swings]);
 
   return (
-    <div className={`shots ${from}`} aria-hidden="true">
+    <div className="shots foe" aria-hidden="true">
       {shots.map((id) => (
         <i
           key={id}
           style={{
             background: color,
             boxShadow: `0 0 8px ${color}`,
-            ['--travel' as string]: `${from === 'hero' ? distance : -distance}px`,
+            ['--travel' as string]: `${-distance}px`,
           }}
         />
       ))}
@@ -333,5 +318,3 @@ export function FighterBar({
     </div>
   );
 }
-
-export { WAVES_PER_DISTRICT };
