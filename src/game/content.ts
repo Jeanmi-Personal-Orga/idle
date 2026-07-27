@@ -4,14 +4,14 @@ export const STATS: Record<
   StatKey,
   { name: string; suffix: string; short: string }
 > = {
-  power: { name: "Puissance", suffix: "", short: "PUI" },
-  health: { name: "Intégrité", suffix: "", short: "INT" },
-  volatility: { name: "Volatilité", suffix: "%", short: "VOL" },
-  chain: { name: "Réaction en chaîne", suffix: "%", short: "RÉA" },
-  osmosis: { name: "Osmose", suffix: "%", short: "OSM" },
-  condensation: { name: "Condensation", suffix: "%/s", short: "CON" },
-  clairvoyance: { name: "Clairvoyance", suffix: "%", short: "CLA" },
-  rupture: { name: "Rupture", suffix: "%", short: "RUP" },
+  power: { name: "Dégâts", suffix: "", short: "DGT" },
+  health: { name: "Points de vie", suffix: "", short: "PV" },
+  volatility: { name: "Vitesse de frappe", suffix: "%", short: "VIT" },
+  chain: { name: "Double frappe", suffix: "%", short: "DBL" },
+  osmosis: { name: "Vol de vie", suffix: "%", short: "VDV" },
+  condensation: { name: "Régénération", suffix: "%/s", short: "REG" },
+  clairvoyance: { name: "Chance critique", suffix: "%", short: "CRI" },
+  rupture: { name: "Dégâts critiques", suffix: "%", short: "DGC" },
 };
 
 /**

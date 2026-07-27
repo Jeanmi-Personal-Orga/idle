@@ -41,8 +41,12 @@ export function CharacterSelect() {
         <div className="muted small">
           {CHARACTERS.find((c) => c.id === picked)!.blurb}
         </div>
+        <div className="small">
+          {CHARACTERS.find((c) => c.id === picked)!.styleLabel}
+        </div>
         <div className="muted small">
-          L'apparence seule change : tous distillent, encaissent et frappent pareil.
+          Seules l'allure et la façon d'attaquer changent : les dégâts, les points
+          de vie et la vitesse sont identiques pour tous.
         </div>
         <button
           className="ascend"

@@ -8,7 +8,8 @@ services:
       target: serve
     image: alchimiste-de-brume
     ports:
-      - '8080:80'
+      # Port hôte surchargeable : WEB_PORT=8081 docker compose up web
+      - '${WEB_PORT:-8080}:80'
     restart: unless-stopped
 
   # --- Développement : vite avec rechargement à chaud sur http://localhost:5173 ---
@@ -20,7 +21,9 @@ services:
       dockerfile: docker/dev.Dockerfile
     image: alchimiste-de-brume-dev
     ports:
-      - '5173:5173'
+      # Port hôte surchargeable, pour cohabiter avec un vite lancé localement :
+      # DEV_PORT=5174 docker compose --profile dev up -d dev
+      - '${DEV_PORT:-5173}:5173'
     volumes:
       - .:/app
       # node_modules vient de l'image, pas de l'hôte : les binaires natifs

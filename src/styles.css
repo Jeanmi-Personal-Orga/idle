@@ -271,56 +271,116 @@ main {
   filter: brightness(0.45) saturate(0.6);
 }
 
+/* Une seule scène partagée : les combattants s'y déplacent. */
 .arena {
   position: relative;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: end;
-  gap: 10px;
-  min-height: 132px;
-  padding-top: 6px;
+  height: 150px;
+  overflow: hidden;
 }
 
-/* Trois couches : fond noyé, brume, silhouettes au premier plan. */
+/* Trois couches : fond noyé, brume, sol au premier plan. */
 .layer {
   position: absolute;
-  inset: auto 0 22px 0;
-  height: 60px;
+  inset: auto 0 18px 0;
+  height: 66px;
   pointer-events: none;
 }
 
 .layer.far {
   background:
     linear-gradient(to top, transparent, rgba(84, 93, 114, 0.16)),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 26px,
-      rgba(26, 29, 38, 0.55) 26px 44px
-    );
+    repeating-linear-gradient(90deg, transparent 0 26px, rgba(26, 29, 38, 0.55) 26px 44px);
   opacity: 0.5;
 }
 
 .layer.near {
   inset: auto 0 0 0;
-  height: 22px;
+  height: 18px;
   background: linear-gradient(to top, var(--stone-1), transparent);
 }
 
-.fighter {
-  position: relative;
+/* Position de départ de chacun, pieds posés sur le sol. */
+.fighter-slot {
+  position: absolute;
+  bottom: 10px;
+  z-index: 1;
+}
+
+.fighter-slot.hero {
+  left: 6%;
+}
+
+.fighter-slot.foe {
+  right: 6%;
+}
+
+/*
+ * Trois couches de transform, une par responsabilité : le slot place, le
+ * `mover` déplace, la boîte du sprite joue l'entrée dans la brume. Les empiler
+ * sur un même élément ferait qu'une animation en écrase une autre.
+ */
+.mover {
+  transition: transform 0.19s ease-in-out;
+}
+
+/* Fioles en vol : la couleur vient du palier du Flacon équipé (§2). */
+.shots {
+  position: absolute;
+  bottom: 76px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.shots.hero {
+  left: 15%;
+}
+
+.shots.foe {
+  right: 15%;
+}
+
+@keyframes fly-across {
+  0% {
+    transform: translateX(0) translateY(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(var(--travel)) translateY(6px);
+    opacity: 0;
+  }
+}
+
+.shots i {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  animation: fly-across 0.4s ease-in forwards;
+}
+
+/* Barres et chiffres, sous la scène commune. */
+.bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.fighter-bar {
   display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
-  z-index: 1;
 }
 
-.fighter .stage {
-  position: relative;
-  height: 74px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
+.fighter-bar.foe {
+  text-align: right;
+}
+
+.fighter-bar.foe .bar {
+  transform: scaleX(-1);
 }
 
 .fighter-name {

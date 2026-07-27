@@ -98,12 +98,37 @@ l'animation d'entrée, et une animation de `transform` écraserait un miroir pos
 au même endroit. Toutes les animations sont désactivées sous
 `prefers-reduced-motion`, et aucune ne tourne quand l'onglet est masqué.
 
+### L'arène
+
+Les deux combattants sont sur **une seule scène**, et la distance s'y joue :
+
+- au corps à corps, on traverse l'arène pour frapper puis on recule ;
+- à distance, on reste chez soi et on projette une fiole — sa couleur est celle
+  du palier du Flacon équipé ;
+- si l'un est au contact et l'autre à distance, c'est **celui au contact qui se
+  déplace**, jusqu'à la position de l'autre ; si les deux sont au contact, ils se
+  rejoignent à mi-chemin.
+
+La distance parcourue est mesurée dans le DOM, pas fixée en pourcentage : les
+gabarits de sprites diffèrent (un rat de cale fait 112 × 64, un contremaître
+160 × 208). Au-delà d'une frappe toutes les 0,9 s, l'aller-retour devient
+illisible : le combattant reste alors au contact entre deux coups.
+
+C'est de la **mise en scène** : le déplacement suit le rythme réel des attaques
+mais ne change aucun résultat. L'équilibrage simulé sur 72 h reste intact.
+
+Les sept animations livrées servent toutes : `walk` pendant l'approche (pour qui
+en a une), `attack`/`throw` à l'impact, `pour` une frappe sur quatre, `hurt`
+quand un coup porte, `death` puis `revive` pendant la réanimation.
+
 ### Choix du personnage
 
 Au premier lancement, le joueur choisit parmi quatre habitants de la ville noyée
-(`src/game/characters.ts`). Le choix est **purement cosmétique** : l'équilibrage
-a été simulé sur 72 h, et des bonus par personnage rendraient irrattrapable une
-décision prise à la première minute, sans information. Les sauvegardes
+(`src/game/characters.ts`). Aucune statistique ne change : l'équilibrage a été
+simulé sur 72 h, et des bonus par personnage rendraient irrattrapable une
+décision prise à la première minute, sans information. Seule la **portée**
+diffère — l'alchimiste jette ses fioles à distance, les trois autres vont au
+contact — ce qui se voit à l'écran sans peser sur les chiffres. Les sauvegardes
 antérieures gardent l'alchimiste sans revoir l'écran.
 
 ## Systèmes en place
@@ -157,8 +182,15 @@ avec `docker compose --profile dev up --build dev`.
 
 Le conteneur `dev` et un `npm run dev` lancé sur la machine se disputent le port
 5173 : `failed to bind host port [::]:5173/tcp: address already in use`. Coupe
-l'un des deux (`pkill -f vite`), ou change le port hôte dans `compose.yaml`
-(`'5174:5173'`). Même remarque entre l'image `web` et un autre service sur 8080.
+l'un des deux (`pkill -f vite`), ou donne un autre port hôte au conteneur :
+
+```bash
+DEV_PORT=5174 docker compose --profile dev up -d dev
+WEB_PORT=8081 docker compose up -d web
+```
+
+C'est la seule cause connue d'échec de `-d` : le démarrage détaché fonctionne, y
+compris le rechargement à chaud (le dossier est monté, vite voit les fichiers).
 
 **iOS : la compilation ne peut pas se faire dans Docker.** Xcode n'existe que sur
 macOS et sa licence interdit de l'exécuter ailleurs — il n'y a pas de

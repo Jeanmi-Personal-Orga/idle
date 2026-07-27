@@ -31,7 +31,7 @@ export const LEGACIES: Legacy[] = [
   {
     id: 'salt',
     name: 'Sel primordial',
-    effect: (n) => `Puissance et Intégrité +${pct(0.22 * n)}`,
+    effect: (n) => `Dégâts et points de vie +${pct(0.22 * n)}`,
     max: 30,
     costBase: 3,
     costGrowth: 1.55,

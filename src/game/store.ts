@@ -33,8 +33,9 @@ class GameStore {
   state: GameState;
   /** Coups récents pour l'affichage ; vidés au fil du temps.  */
   hits: FloatingHit[] = [];
-  /** Incrémenté à chaque coup encaissé : déclenche la secousse de l'écran. */
-  shake = 0;
+  /** Compteurs d'attaques, pour que l'arène joue les bonnes animations. */
+  heroSwings = 0;
+  foeSwings = 0;
   private listeners = new Set<() => void>();
   private revision = 0;
   private accumulator = 0;
@@ -116,8 +117,10 @@ class GameStore {
       });
       // Garde-fou : à très haute vitesse d'attaque, on ne garde que les derniers.
       if (this.hits.length > 12) this.hits.splice(0, this.hits.length - 12);
+    } else if (event.type === 'swing') {
+      this.heroSwings++;
     } else if (event.type === 'taken') {
-      this.shake++;
+      this.foeSwings++;
     }
   }
 

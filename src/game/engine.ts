@@ -85,6 +85,8 @@ function pushLog(state: GameState, msg: string) {
  * d'équilibrage tourne sans écouteur.
  */
 export type CombatEvent =
+  /** Le héros lance une attaque : une seule par cycle, avant ses coups. */
+  | { type: 'swing' }
   | { type: 'hit'; damage: number; crit: boolean }
   | { type: 'taken'; damage: number }
   | { type: 'kill' };
@@ -141,6 +143,7 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
   let guard = 0;
   while (c.hero.cooldown <= 0 && guard++ < 20) {
     c.hero.cooldown += interval;
+    sink({ type: 'swing' });
     const hits = 1 + (rng() < chainChance(s) ? 1 : 0);
     for (let i = 0; i < hits; i++) {
       const crit = rng() < critChance(s);

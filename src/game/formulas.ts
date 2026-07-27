@@ -3,12 +3,12 @@ import { mods as allMods } from './modifiers';
 import { NEUTRAL_MODS, type TechMods } from './tech';
 import type { GameState, Item, PurityId, SlotId, StatKey, Stats } from './types';
 
-/** Intervalle de frappe de base, en secondes, avant Volatilité. */
+/** Intervalle de frappe de base, en secondes, avant la Vitesse de frappe. */
 export const BASE_INTERVAL = 1.4;
 
 /**
  * Statistiques exprimées en pourcentage. Elles montent beaucoup plus lentement
- * que Puissance/Intégrité : sans cela, un objet de haut palier dépasserait à lui
+ * que les Dégâts et les Points de vie : sans cela, un objet de haut palier dépasserait à lui
  * seul le plafond de 100 % et les objectifs de composition perdraient tout sens.
  */
 const PERCENT_STATS: StatKey[] = [
@@ -22,7 +22,7 @@ const PERCENT_STATS: StatKey[] = [
 
 export const isPercent = (k: StatKey) => PERCENT_STATS.includes(k);
 
-/** Un objet gagne 12 % de Puissance/Intégrité par niveau, 3,5 % sur le reste. */
+/** Un objet gagne 14 % de Dégâts/Points de vie par niveau, 4 % sur le reste. */
 export const levelMult = (level: number, percent = false) =>
   1 + (percent ? 0.04 : 0.14) * (level - 1);
 
@@ -71,7 +71,7 @@ export function heroStats(state: GameState): Required<Stats> {
 export const attackInterval = (s: Required<Stats>) =>
   BASE_INTERVAL / (1 + Math.max(0, s.volatility) / 100);
 
-/** La Réaction en chaîne est plafonnée à 100 % : au-delà, aucun gain. */
+/** La Double frappe est plafonnée à 100 % : au-delà, aucun gain. */
 export const chainChance = (s: Required<Stats>) => Math.min(100, s.chain) / 100;
 export const critChance = (s: Required<Stats>) => Math.min(100, s.clairvoyance) / 100;
 
