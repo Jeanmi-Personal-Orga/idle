@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { formatNum } from '../game/engine';
+import { formatDuration, formatNum } from '../game/engine';
+import { resourceDef } from '../game/resources';
 import { store, useGame } from '../game/store';
 import {
   BRANCHES,
@@ -10,7 +11,7 @@ import {
   nodeLevel,
   nodesOf,
   research,
-  researchMax,
+  researchWithCatalyst,
   totalInvested,
   type BranchId,
   type TechNode,
@@ -35,8 +36,10 @@ export function TechView() {
             <div className="label">Recherche</div>
             <div className="muted small">
               <span className="res-insight">◇ {formatNum(state.resources.insight)}</span>{' '}
-              lucidité ·{' '}
+              {resourceDef('insight').name.toLowerCase()} ·{' '}
               {affordable > 0 ? `${affordable} nœud(s) à portée` : 'rien à portée'}
+              {state.resources.catalyst > 0 &&
+                ` · ${resourceDef('catalyst').icon} ${formatNum(state.resources.catalyst)}`}
             </div>
           </div>
         </div>
@@ -54,6 +57,12 @@ export function TechView() {
           ))}
         </div>
         <div className="muted small">{def.blurb}</div>
+        {state.researching && (
+          <div className="muted small">
+            ⧗ Recherche en cours : {nodeDef(state.researching.id).name} ·{' '}
+            {formatDuration(state.researching.remaining)} restant
+          </div>
+        )}
       </div>
 
       <div className="stack">
@@ -71,7 +80,9 @@ function NodeCard({ node, color }: { node: TechNode; color: string }) {
   const unlocked = isUnlocked(state, node);
   const maxed = level >= node.max;
   const cost = nodeCost(node, level);
-  const affordable = !maxed && unlocked && state.resources.insight >= cost;
+  const active = state.researching?.id === node.id;
+  const busyOther = !!state.researching && !active;
+  const affordable = !maxed && unlocked && !state.researching && state.resources.insight >= cost;
 
   if (!unlocked) {
     const req = node.requires!;
@@ -117,21 +128,31 @@ function NodeCard({ node, color }: { node: TechNode; color: string }) {
       {!maxed && (
         <>
           <div className="muted small">Prochain : {node.effect(level + 1)}</div>
-          <div className="row">
-            <button
-              disabled={!affordable}
-              onClick={() => store.act((s) => research(s, node.id))}
-            >
-              Chercher <span className="muted small">◇ {formatNum(cost)}</span>
-            </button>
-            <button
-              className="ghost"
-              disabled={!affordable}
-              onClick={() => store.act((s) => researchMax(s, node.id))}
-            >
-              Max
-            </button>
-          </div>
+          {active ? (
+            <div className="row">
+              <div className="muted small">
+                Recherche en cours · {formatDuration(state.researching!.remaining)} restant
+              </div>
+              {state.resources.catalyst > 0 && (
+                <button
+                  className="ghost"
+                  onClick={() => store.act((s) => researchWithCatalyst(s, node.id))}
+                >
+                  ⧗ Passer avec un catalyseur
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="row">
+              <button
+                disabled={!affordable}
+                onClick={() => store.act((s) => research(s, node.id))}
+              >
+                Chercher <span className="muted small">◇ {formatNum(cost)}</span>
+              </button>
+              {busyOther && <span className="muted small">Une recherche est déjà en cours</span>}
+            </div>
+          )}
         </>
       )}
     </div>

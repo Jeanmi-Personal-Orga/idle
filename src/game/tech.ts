@@ -219,20 +219,46 @@ export function canResearch(state: GameState, node: TechNode): boolean {
   );
 }
 
+/** Durée d'une recherche : suit la courbe de coût du nœud, plafonnée pour rester raisonnable. */
+export function researchDuration(node: TechNode, level: number): number {
+  const cost = nodeCost(node, level);
+  return Math.min(150, 4 + Math.sqrt(cost) * 1.8);
+}
+
+/** Lance une recherche minutée (un seul nœud à la fois). */
 export function research(state: GameState, id: string): boolean {
+  if (state.researching) return false;
   const node = nodeDef(id);
   if (!canResearch(state, node)) return false;
   const lvl = nodeLevel(state, id);
   state.resources.insight -= nodeCost(node, lvl);
-  state.tech[id] = lvl + 1;
+  const total = researchDuration(node, lvl);
+  state.researching = { id, remaining: total, total };
   return true;
 }
 
-/** Achète autant de niveaux que la Lucidité le permet. */
-export function researchMax(state: GameState, id: string): number {
-  let bought = 0;
-  while (research(state, id)) bought++;
-  return bought;
+/** Fait avancer la recherche en cours ; l'applique dès qu'elle arrive à terme. */
+export function advanceResearch(state: GameState, dt: number) {
+  const r = state.researching;
+  if (!r) return;
+  r.remaining -= dt;
+  if (r.remaining <= 0) completeResearch(state);
+}
+
+function completeResearch(state: GameState) {
+  const r = state.researching;
+  if (!r) return;
+  const lvl = nodeLevel(state, r.id);
+  state.tech[r.id] = lvl + 1;
+  state.researching = null;
+}
+
+/** Dépense un catalyseur pour terminer la recherche en cours sur-le-champ. */
+export function researchWithCatalyst(state: GameState, _id: string): boolean {
+  if (!state.researching || state.resources.catalyst < 1) return false;
+  state.resources.catalyst -= 1;
+  completeResearch(state);
+  return true;
 }
 
 /**

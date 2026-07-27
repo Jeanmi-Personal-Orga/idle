@@ -2,25 +2,25 @@ import { useState } from 'react';
 import { formatNum } from './game/engine';
 import { useGame, useGameLoop } from './game/store';
 import { BrumeView } from './ui/BrumeView';
-import { GearView } from './ui/GearView';
-import { LabView } from './ui/LabView';
 import { TechView } from './ui/TechView';
 import { AscendView } from './ui/AscendView';
+import { ShopView } from './ui/Shop';
 import { Fog } from './ui/Fog';
 import { CharacterSelect } from './ui/CharacterSelect';
+import { AuthScreen } from './ui/AuthScreen';
 import { hasUnlockedAscension, shardGain } from './game/ascension';
+import { authStore, hasSkippedAuth, useAuth } from './game/auth';
 
-type Tab = 'brume' | 'lab' | 'gear' | 'tech' | 'ascend';
+type Tab = 'brume' | 'tech' | 'shop' | 'ascend';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'brume', label: 'Brume', icon: '☁' },
-  { id: 'lab', label: 'Laboratoire', icon: '⚗' },
-  { id: 'gear', label: 'Élixirs', icon: '❖' },
   { id: 'tech', label: 'Recherche', icon: '◇' },
+  { id: 'shop', label: 'Boutique', icon: '💰' },
   { id: 'ascend', label: 'Dissolution', icon: '✧' },
 ];
 
-/** L'ancre de l'URL choisit l'onglet initial : #lab, #gear, #tech, #ascend. */
+/** L'ancre de l'URL choisit l'onglet initial : #tech, #shop, #ascend. */
 function initialTab(): Tab {
   const hash = location.hash.slice(1) as Tab;
   return TABS.some((t) => t.id === hash) ? hash : 'brume';
@@ -29,8 +29,29 @@ function initialTab(): Tab {
 export default function App() {
   useGameLoop();
   const state = useGame();
+  const session = useAuth();
   const [tab, setTab] = useState<Tab>(initialTab);
-  const stashCount = state.stash.length;
+  // Un skip explicite tient jusqu'au reload suivant ; se reconnecter (via le
+  // bouton d'en-tête) rouvre l'écran sans attendre un rechargement.
+  const [authDismissed, setAuthDismissed] = useState(() => hasSkippedAuth());
+  const [showAuth, setShowAuth] = useState(false);
+
+  // Écran de connexion d'abord (sauf déjà connecté ou déjà sauté) : une
+  // sauvegarde cloud existante doit primer sur l'écran de choix de personnage,
+  // pas l'inverse.
+  if ((!session && !authDismissed) || showAuth) {
+    return (
+      <div className="app">
+        <AuthScreen
+          onDone={() => {
+            setAuthDismissed(true);
+            setShowAuth(false);
+          }}
+        />
+        <Fog />
+      </div>
+    );
+  }
 
   // Première chose que voit un nouveau joueur : qui il incarne.
   if (!state.character) {
@@ -56,19 +77,35 @@ export default function App() {
           <span className="res-insight" title="Lucidité — alimente la recherche">
             ◇ {formatNum(state.resources.insight)}
           </span>
+          {state.resources.goldCoin > 0 && (
+            <span className="res-gold-coin" title="Pièces d'or — tombent au combat, dépensées à la boutique">
+              💰 {formatNum(state.resources.goldCoin)}
+            </span>
+          )}
           {(state.resources.shard > 0 || state.ascension.count > 0) && (
             <span className="res-shard" title="Éclats — scellent les legs permanents">
               ✧ {formatNum(state.resources.shard)}
             </span>
           )}
         </div>
+        {session ? (
+          <div className="muted small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {session.user.username}
+            <button className="ghost" onClick={() => authStore.logout()}>
+              Déconnexion
+            </button>
+          </div>
+        ) : (
+          <button className="ghost" onClick={() => setShowAuth(true)}>
+            Se connecter
+          </button>
+        )}
       </header>
 
       <main>
         {tab === 'brume' && <BrumeView />}
-        {tab === 'lab' && <LabView />}
-        {tab === 'gear' && <GearView />}
         {tab === 'tech' && <TechView />}
+        {tab === 'shop' && <ShopView />}
         {tab === 'ascend' && <AscendView />}
       </main>
 
@@ -84,8 +121,6 @@ export default function App() {
           >
             <span className="icon">{t.icon}</span>
             {t.label}
-            {t.id === 'gear' && stashCount > 0 && <em className="badge">{stashCount}</em>}
-            {t.id === 'lab' && state.distilling && <em className="badge dot" />}
             {t.id === 'ascend' && hasUnlockedAscension(state) && shardGain(state) > 0 && (
               <em className="badge shard" />
             )}

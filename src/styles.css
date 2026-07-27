@@ -23,6 +23,8 @@
   --reagent: #d68b3f;
   --insight: #7f9dff;
   --shard: #e0d0ff;
+  --catalyst: #62d4c4;
+  --gold-coin: #f2c85c;
   --lantern: #ffcf87;
 
   --fg: #dfe7ef;
@@ -64,6 +66,23 @@ body {
   height: 100%;
   max-width: 640px;
   margin: 0 auto;
+}
+
+/* Popup de mission : sous la brume, au-dessus du reste. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 18, 0.6);
+  z-index: 60;
+  padding: 20px;
+}
+
+.modal-card {
+  max-width: 360px;
+  width: 100%;
 }
 
 /* La brume : une seule surcouche, 15 % d'opacité, au-dessus de tout (§6). */
@@ -181,6 +200,12 @@ header {
 .res-shard {
   color: var(--shard);
 }
+.res-catalyst {
+  color: var(--catalyst);
+}
+.res-gold-coin {
+  color: var(--gold-coin);
+}
 
 main {
   flex: 1;
@@ -270,6 +295,27 @@ main {
   filter: brightness(0.45) saturate(0.6);
 }
 
+/* Laboratoire et équipement, ramenés dans Brume : un peu plus petits que le
+   combat, pour que la vue reste jouable sans onglet séparé. */
+.card.compact {
+  padding: 8px;
+  gap: 6px;
+  font-size: 13px;
+}
+.card.compact .lab-scene {
+  max-height: 120px;
+  border-radius: 10px;
+}
+
+/* Le chaudron mérite un peu de mise en scène : un filet doré, une lueur douce. */
+.lab-card {
+  border-color: color-mix(in srgb, var(--essence) 35%, var(--line));
+  box-shadow: 0 0 18px -8px var(--essence);
+}
+.lab-card .label {
+  color: var(--essence);
+}
+
 /* Une seule scène partagée : les combattants s'y déplacent. */
 .arena {
   position: relative;
@@ -318,6 +364,13 @@ main {
 
 .fighter-slot.foe {
   right: 6%;
+}
+
+/* Ennemis en surnombre (vague de contrat) : en retrait, sans mise en scène. */
+.fighter-slot.foe.extra {
+  z-index: 0;
+  transform-origin: bottom right;
+  scale: 0.8;
 }
 
 /*
@@ -759,6 +812,33 @@ main {
   width: 34px;
   height: 34px;
   flex: none;
+}
+
+/* Grille d'icônes d'équipement : un clic déplie les stats, sans les imposer. */
+.grid-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 44px);
+  gap: 8px;
+}
+
+.slot-icon-btn {
+  width: 44px;
+  height: 44px;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #1c232e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot-icon-btn.active {
+  border-color: var(--essence);
+}
+
+.slot-icon-btn.empty {
+  opacity: 0.45;
 }
 
 .item-name {

@@ -32,6 +32,42 @@ services:
       - devmodules:/app/node_modules
     profiles: ['dev']
 
+  # --- Base de données : PostgreSQL pour les comptes joueurs ---
+  # docker compose up -d db
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-alchimiste}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alchimiste}
+      POSTGRES_DB: ${POSTGRES_DB:-alchimiste_auth}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-alchimiste} -d ${POSTGRES_DB:-alchimiste_auth}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- API : authentification (login/signup) sur http://localhost:3001 ---
+  # docker compose up -d db api
+  api:
+    build:
+      context: .
+      dockerfile: docker/server.Dockerfile
+    image: alchimiste-de-brume-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-alchimiste}:${POSTGRES_PASSWORD:-alchimiste}@db:5432/${POSTGRES_DB:-alchimiste_auth}
+      # Secret de dev uniquement : à surcharger avec une vraie valeur avant
+      # tout déploiement réel (JWT_SECRET=... docker compose up -d api).
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+    ports:
+      - '${API_PORT:-3001}:3001'
+    restart: unless-stopped
+
   # --- Android : dépose out/app-debug.apk puis s'arrête ---
   # docker compose --profile android run --rm android
   android:
@@ -61,3 +97,4 @@ services:
 
 volumes:
   devmodules:
+  postgres-data:

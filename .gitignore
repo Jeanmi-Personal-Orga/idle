@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Config locale du front (URL d'API...) : rien de secret, mais spécifique à la machine.
+/.env
+!/.env.example
+
+# Backend d'authentification (server/) : secrets locaux, pas de build versionné.
+server/.env
+server/dist
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

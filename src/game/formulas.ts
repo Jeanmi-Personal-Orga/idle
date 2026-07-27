@@ -105,14 +105,26 @@ export function enemyDamage(district: number, wave: number): number {
 
 export const enemyInterval = () => 1.6;
 
+/**
+ * Nombre d'ennemis simultanés. Toutes les 5 vagues (hors gardien), la vague
+ * est un « contrat » et envoie plusieurs ennemis à la fois ; les districts
+ * profonds (≥ 2) en envoient un de plus. Reste modeste : c'est du spectacle,
+ * pas un rééquilibrage — voir la répartition de PV/dégâts dans `makeEnemies`.
+ */
+export function enemyCount(district: number, wave: number): number {
+  if (wave % 5 !== 0 || wave >= WAVES_PER_DISTRICT) return 1;
+  return district >= 2 ? 3 : 2;
+}
+
 export function waveReward(district: number, wave: number) {
   const districtMult = Math.pow(7, district);
   const boss = wave === WAVES_PER_DISTRICT ? 10 : 1;
   return {
     essence: 14 * districtMult * Math.pow(1.13, wave - 1) * boss,
-    /** Chance de faire tomber un réactif, garantie sur le gardien. */
-    reagentChance: wave === WAVES_PER_DISTRICT ? 1 : 0.22,
-    reagent: 1 + district * 2 + (wave === WAVES_PER_DISTRICT ? 12 : 0),
+    /** Chaque ennemi tué lâche déjà 1 réactif garanti (voir `advanceCombat`) : ce bonus
+     * de fin de vague ne sert plus qu'à faire du gardien un vrai coup de chance. */
+    reagentChance: wave === WAVES_PER_DISTRICT ? 1 : 0,
+    reagent: wave === WAVES_PER_DISTRICT ? 8 + district * 2 : 0,
   };
 }
 
@@ -126,16 +138,26 @@ export const upgradeCost = (item: Item, mods: TechMods = NEUTRAL_MODS) =>
       mods.refineMult,
   );
 
+/** Agrandir le laboratoire ne demande que de l'essence : les réactifs servent à fabriquer, pas à bâtir. */
 export const labUpgradeCost = (labLevel: number) => ({
   essence: Math.ceil(120 * Math.pow(1.28, labLevel - 1)),
-  reagent: Math.ceil(4 * Math.pow(1.22, labLevel - 1)),
 });
 
-export const distillCost = (labLevel: number) => Math.ceil(6 + 2.2 * (labLevel - 1));
+/** Durée de l'amélioration du laboratoire : rapide en début de partie, plafonnée ensuite. */
+export const labUpgradeDuration = (labLevel: number) => Math.min(180, 8 + labLevel * 1.5);
 
-/** Durée d'une distillation, réduite par le laboratoire et la recherche. */
+/** Coût d'un catalyseur à la boutique, en essence : une vraie dépense, pas la source principale. */
+export const catalystShopCost = (owned: number) => Math.ceil(200 * Math.pow(1.6, owned));
+
+/** Un seul réactif suffit à lancer une distillation, quel que soit le laboratoire : le hasard fait le reste. */
+export const distillCost = (_labLevel: number) => 1;
+
+/** Nombre de secondaires garanti par palier de pureté : rien en Trouble/Clair, une en Prismatique/Éthéré, deux à partir de Quintessence. */
+const SUB_COUNT_BY_PURITY = [0, 0, 1, 1, 2, 2];
+
+/** Durée d'une distillation : toujours courte, 2 à 3 s, pour que fabriquer reste un geste répété et non une attente. */
 export const distillDuration = (labLevel: number, mods: TechMods = NEUTRAL_MODS) =>
-  Math.max(2, 30 * Math.pow(0.94, labLevel - 1) * mods.distillMult);
+  Math.min(3, Math.max(2, 3 * Math.pow(0.94, labLevel - 1) * mods.distillMult));
 
 /**
  * Poids de tirage des paliers de pureté. Le laboratoire déplace la courbe vers
@@ -181,7 +203,7 @@ export function makeItem(
   const jitter = 0.85 + rng() * 0.3;
   const subCount = Math.min(
     4,
-    1 + Math.floor(pi / 1.5) + (rng() < 0.25 + mods.subChance ? 1 : 0),
+    SUB_COUNT_BY_PURITY[pi] + (rng() < mods.subChance ? 1 : 0),
   );
 
   const pool = [...def.subs];

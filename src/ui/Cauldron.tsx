@@ -3,6 +3,59 @@ import { purityWeights } from '../game/formulas';
 import type { GameState } from '../game/types';
 import type { Mods } from '../game/modifiers';
 
+let propUid = 0;
+
+/**
+ * Une case d'une planche de décor (96 × 96, famille `Cauldron and Powder`,
+ * `Jars`, `Candles`, etc.), croppée via un `<clipPath>` : c'est le moyen le
+ * plus simple de n'afficher qu'une case sans découper les images au préalable.
+ */
+function PropIcon({
+  sheet,
+  cols,
+  rows,
+  x,
+  y,
+  px,
+  py,
+  size = 12,
+  opacity = 1,
+}: {
+  /** Chemin de la planche complète. */
+  sheet: string;
+  /** Dimensions de la planche, en cases. */
+  cols: number;
+  rows: number;
+  /** Case voulue, colonne puis ligne (0-indexé). */
+  x: number;
+  y: number;
+  /** Position dans la scène, en unités du viewBox. */
+  px: number;
+  py: number;
+  /** Côté de la case affichée, en unités du viewBox. */
+  size?: number;
+  opacity?: number;
+}) {
+  const id = `prop-${++propUid}`;
+  return (
+    <g transform={`translate(${px}, ${py})`} opacity={opacity}>
+      <clipPath id={id}>
+        <rect x="0" y="0" width={size} height={size} />
+      </clipPath>
+      <g clipPath={`url(#${id})`}>
+        <image
+          href={sheet}
+          x={-x * size}
+          y={-y * size}
+          width={cols * size}
+          height={rows * size}
+          preserveAspectRatio="none"
+        />
+      </g>
+    </g>
+  );
+}
+
 /**
  * Le laboratoire en coupe (direction-artistique.md §4). Le chaudron raconte
  * l'état du jeu sans un seul chiffre :
@@ -56,6 +109,10 @@ export function Cauldron({
 
       {/* Le mur du fond s'ouvre sur la brume passé le niveau 100 (§4). */}
       {lvl >= 100 && <rect x="120" y="14" width="66" height="60" fill="#3d4557" opacity="0.5" />}
+      {/* Un regard dans la brume — clin d'œil discret pour qui reste assez longtemps. */}
+      {lvl >= 100 && (
+        <PropIcon sheet="/sprites/props/eyes.png" cols={8} rows={4} x={2} y={1} px={150} py={30} size={10} opacity={0.75} />
+      )}
 
       {/* Étagères et fioles rangées : à partir du niveau 11. */}
       {lvl >= 11 && (
@@ -73,6 +130,9 @@ export function Cauldron({
               opacity="0.85"
             />
           ))}
+          {/* Deux vrais bocaux de la planche `Jars`, au bout de l'étagère. */}
+          <PropIcon sheet="/sprites/props/jars.png" cols={10} rows={6} x={0} y={0} px={6} py={20} size={9} />
+          <PropIcon sheet="/sprites/props/jars.png" cols={10} rows={6} x={1} y={0} px={14} py={20} size={9} />
         </g>
       )}
 
@@ -82,6 +142,11 @@ export function Cauldron({
           <rect x="150" y="60" width="16" height="20" rx="3" fill="#3d4557" stroke="#545d72" />
           <rect x="170" y="66" width="12" height="14" rx="3" fill="#3d4557" stroke="#545d72" />
           <rect x="146" y="86" width="42" height="3" fill="#4a3324" />
+          {/* Une paire de bougies pour la lumière d'ambiance, près du chat. */}
+          <PropIcon sheet="/sprites/props/candles.png" cols={16} rows={10} x={0} y={0} px={42} py={90} size={8} />
+          <PropIcon sheet="/sprites/props/candles.png" cols={16} rows={10} x={2} y={0} px={50} py={90} size={8} />
+          {/* Un outil accroché au mur des alambics secondaires. */}
+          <PropIcon sheet="/sprites/props/equipment.png" cols={8} rows={8} x={1} y={2} px={172} py={64} size={9} />
         </g>
       )}
 
@@ -95,6 +160,19 @@ export function Cauldron({
         <rect x="16" y="86" width="20" height="18" fill="#4a3324" stroke="#2f2016" />
         <path d="M16 95 H36 M26 86 V104" stroke="#2f2016" strokeWidth="1" />
       </g>
+
+      {/* Une plante en pot, au sol contre la caisse : niveau 11, aux côtés des étagères. */}
+      {lvl >= 11 && (
+        <PropIcon sheet="/sprites/props/plants.png" cols={8} rows={6} x={0} y={0} px={5} py={90} size={9} />
+      )}
+
+      {/* Un gemme et une fiole posés sur la caisse : purement décoratif. */}
+      <PropIcon sheet="/sprites/props/gems.png" cols={7} rows={6} x={0} y={0} px={17} py={78} size={9} />
+      <PropIcon sheet="/sprites/props/potions.png" cols={19} rows={12} x={1} y={0} px={27} py={78} size={8} />
+
+      {/* Poudre et bocal du même sachet que le chaudron, posés devant le foyer. */}
+      <PropIcon sheet="/sprites/props/cauldron.png" cols={12} rows={7} x={1} y={1} px={40} py={98} size={10} opacity={0.9} />
+      <PropIcon sheet="/sprites/props/cauldron.png" cols={12} rows={7} x={0} y={2} px={108} py={99} size={9} opacity={0.85} />
 
       {/* Le chaudron, cuivré et cabossé, sur son foyer. */}
       <path

@@ -4,7 +4,7 @@ import { itemStats } from '../game/formulas';
 import type { Item, SlotId } from '../game/types';
 
 /** Silhouette de l'emplacement : la forme se lit avant la couleur (§5). */
-function SlotIcon({ slot, color }: { slot: SlotId; color: string }) {
+export function SlotIcon({ slot, color }: { slot: SlotId; color: string }) {
   return (
     <svg viewBox="0 0 24 24" className="slot-icon" aria-hidden="true">
       {slot === 'flacon' && (

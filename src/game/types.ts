@@ -51,6 +51,10 @@ export interface Resources {
   insight: number;
   /** Monnaie de méta-progression (ascension). */
   shard: number;
+  /** Rare : permet de terminer instantanément une fabrication ou des travaux. */
+  catalyst: number;
+  /** Tombe au combat, indépendamment de l'essence : la seule monnaie du comptoir. */
+  goldCoin: number;
 }
 
 export interface Ascension {
@@ -75,6 +79,8 @@ export interface Enemy {
   cooldown: number;
   interval: number;
   name: string;
+  /** Sprite à afficher pour cet ennemi précis (voir `enemySprite`). */
+  sprite: string;
 }
 
 export interface CombatState {
@@ -83,7 +89,8 @@ export interface CombatState {
   /** Meilleure vague atteinte dans le district courant. */
   best: number;
   hero: Hero;
-  enemy: Enemy;
+  /** Toujours au moins un ennemi. Ordre = priorité de ciblage du héros. */
+  enemies: Enemy[];
   /** Vrai pendant la pause qui suit une mort. */
   reviving: number;
 }
@@ -100,6 +107,12 @@ export interface GameState {
   equipped: Partial<Record<SlotId, Item>>;
   stash: Item[];
   distilling: Distillation | null;
+  /** Relance une distillation (pièce au hasard) dès que la précédente se termine, tant qu'il reste des réactifs. */
+  autoDistill: boolean;
+  /** Amélioration du laboratoire en cours, minutée elle aussi. */
+  labUpgrading: { remaining: number; total: number } | null;
+  /** Recherche en cours (un seul nœud à la fois), minutée. */
+  researching: { id: string; remaining: number; total: number } | null;
   combat: CombatState;
   /** Horodatage du dernier tick, pour la progression hors-ligne. */
   lastSeen: number;

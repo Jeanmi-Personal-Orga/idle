@@ -133,51 +133,72 @@ export const DISTRICTS: {
   name: string;
   enemies: [string, string, string];
   sprites: [string, string, string];
+  /** Une phrase : l'ambiance du chapitre. */
+  blurb: string;
 }[] = [
   {
     name: 'Les Quais Bas',
     enemies: ['Rôdeur de vase', 'Noyé pâle', 'Nuée de brume'],
     sprites: ['rat', 'slime-vert', 'knight-a'],
+    blurb: "L'eau noire lèche des pontons pourris où rien ne reste immobile longtemps.",
   },
   {
     name: 'Le Marché Noyé',
     enemies: ['Marchand creux', 'Verrier fêlé', 'Chien de saumure'],
     sprites: ['grenouille', 'slime-bleu', 'knight-b'],
+    blurb: 'Des étals engloutis marchandent encore, pour des clients qui ne viendront plus.',
   },
   {
     name: 'La Verrerie',
     enemies: ['Souffleur brisé', 'Éclat animé', 'Four hurlant'],
     sprites: ['araignee', 'slime-blanc', 'barbarian'],
+    blurb: 'La chaleur des fours a fait fondre plus que le verre.',
   },
   {
     name: 'Les Citernes',
     enemies: ['Filtreur aveugle', 'Anguille de mercure', 'Gardien calcifié'],
     sprites: ['ver', 'slime-gris', 'fighter'],
+    blurb: "Sous la ville, l'eau qu'on filtrait autrefois a fini par filtrer autre chose.",
   },
   {
     name: "L'Observatoire",
     enemies: ['Astronome dissous', 'Prisme errant', 'Œil de brume'],
     sprites: ['abeille', 'slime-violet', 'knight-a'],
+    blurb: 'Des lentilles brisées regardent encore le ciel, et quelque chose regarde à travers.',
   },
   {
     name: 'Le Puits Prismatique',
     enemies: ['Écho de soi', 'Condensat', 'Le Distillateur'],
     sprites: ['self', 'slime-rose', 'barbarian'],
+    blurb: "Au fond du puits, la brume renvoie ton reflet — et il n'est pas seul.",
   },
 ];
 
 export const WAVES_PER_DISTRICT = 20;
 
+/** Une vague de contrat tombe toutes les 10 paliers, et rapporte des catalyseurs. */
+export const MISSION_WAVE_INTERVAL = 10;
+export const MISSION_CATALYST_REWARD = 2;
+
+/**
+ * Prochaine vague de contrat non encore atteinte dans le chapitre courant, ou
+ * `null` si toutes celles du chapitre ont déjà été nettoyées.
+ */
+export function nextMissionWave(best: number): number | null {
+  for (let w = MISSION_WAVE_INTERVAL; w < WAVES_PER_DISTRICT; w += MISSION_WAVE_INTERVAL) {
+    if (w > best) return w;
+  }
+  return null;
+}
+
 /**
  * La profondeur est illimitée : passé le dernier district, la ville se rejoue en
- * cycles de plus en plus hostiles (« Les Quais Bas · Cycle II »). Sans cela, la
- * dissolution plafonnerait dès la fin du contenu et n'aurait plus rien à mordre.
+ * cycles de plus en plus hostiles. Sans cela, la dissolution plafonnerait dès la
+ * fin du contenu et n'aurait plus rien à mordre.
  */
 export const districtAt = (depth: number) =>
   DISTRICTS[depth % DISTRICTS.length];
 export const cycleOf = (depth: number) => Math.floor(depth / DISTRICTS.length);
-
-const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 
 /** Sprite de l'ennemi courant, dans la même logique que `enemyName`. */
 export function enemySprite(depth: number, wave: number): string {
@@ -185,9 +206,16 @@ export function enemySprite(depth: number, wave: number): string {
   return wave === WAVES_PER_DISTRICT ? d.sprites[2] : d.sprites[wave % 2];
 }
 
+/**
+ * Pas de nom à retenir : juste un numéro qui grimpe sans plafond. Plus le
+ * chapitre est élevé, plus les ennemis sont forts (voir `enemyHp`/`enemyDamage`,
+ * indexés sur cette même profondeur absolue) — le numéro seul dit déjà tout.
+ */
 export function districtLabel(depth: number): string {
-  const cycle = cycleOf(depth);
-  const name = districtAt(depth).name;
-  if (cycle === 0) return name;
-  return `${name} · Cycle ${ROMAN[cycle] ?? cycle + 1}`;
+  return `Chapitre ${depth + 1}`;
+}
+
+/** Phrase d'ambiance du chapitre courant (voir `districtLabel`). */
+export function chapterBlurb(depth: number): string {
+  return districtAt(depth).blurb;
 }

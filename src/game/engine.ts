@@ -1,11 +1,13 @@
-import { WAVES_PER_DISTRICT, districtLabel, purityIndex, slotDef } from './content';
+import { MISSION_CATALYST_REWARD, MISSION_WAVE_INTERVAL, SLOTS, WAVES_PER_DISTRICT, districtAt, districtLabel, enemySprite, purityIndex, slotDef } from './content';
 import {
   attackInterval,
+  catalystShopCost,
   chainChance,
   critChance,
   distillCost,
   distillDuration,
   dps,
+  enemyCount,
   enemyDamage,
   enemyHp,
   enemyInterval,
@@ -13,35 +15,62 @@ import {
   heroStats,
   itemScore,
   labUpgradeCost,
+  labUpgradeDuration,
   makeItem,
   upgradeCost,
   waveReward,
 } from './formulas';
 import { ascMods, hasUnlockedAscension, shardGain } from './ascension';
 import { mods as allMods } from './modifiers';
-import { insightReward } from './tech';
+import { advanceResearch, insightReward } from './tech';
 import type { CharacterId } from './characters';
-import type { GameState, Item, SlotId } from './types';
+import type { Enemy, GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 8;
 
 let idCounter = 0;
 const nextId = () => `i${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 
-export function makeEnemy(
+/** Un seul ennemi, à l'échelle demandée (voir `makeEnemies`). */
+function buildEnemy(
   district: number,
   wave: number,
-  damageMult = 1,
-): GameState['combat']['enemy'] {
-  const maxHp = enemyHp(district, wave);
+  damageMult: number,
+  scale: number,
+  name: string,
+  sprite: string,
+): Enemy {
+  const maxHp = (enemyHp(district, wave) * scale) || 1;
   return {
     hp: maxHp,
     maxHp,
-    damage: enemyDamage(district, wave) * damageMult,
+    damage: enemyDamage(district, wave) * damageMult * scale,
     interval: enemyInterval(),
     cooldown: enemyInterval(),
-    name: enemyName(district, wave),
+    name,
+    sprite,
   };
+}
+
+/**
+ * Construit tous les ennemis d'une vague. Sur une vague à plusieurs ennemis,
+ * chacun est affaibli par `1/√n` : la difficulté totale grandit avec le
+ * nombre d'ennemis, sans que chacun devienne trivial ni que le total explose
+ * (une division à plat aurait rendu les vagues à 3 ennemis presque plus
+ * faciles que les vagues normales, une fois la Double frappe en jeu).
+ */
+export function makeEnemies(district: number, wave: number, damageMult = 1): Enemy[] {
+  const count = enemyCount(district, wave);
+  const scale = 1 / Math.sqrt(count);
+  const d = districtAt(district);
+  const baseSprite = enemySprite(district, wave);
+  const out: Enemy[] = [];
+  for (let i = 0; i < count; i++) {
+    const name = count === 1 ? enemyName(district, wave) : `${d.enemies[i % 2]} (${i + 1})`;
+    const sprite = count === 1 ? baseSprite : d.sprites[i % 2];
+    out.push(buildEnemy(district, wave, damageMult, scale, name, sprite));
+  }
+  return out;
 }
 
 export function newGame(): GameState {
@@ -49,19 +78,22 @@ export function newGame(): GameState {
     version: SAVE_VERSION,
     // null : le sélecteur de personnage s'affiche au premier lancement.
     character: null,
-    resources: { essence: 0, reagent: 6, insight: 0, shard: 0 },
+    resources: { essence: 0, reagent: 6, insight: 0, shard: 0, catalyst: 0, goldCoin: 0 },
     labLevel: 1,
     tech: {},
     ascension: { count: 0, legacies: {}, deepest: 0 },
     equipped: {},
     stash: [],
     distilling: null,
+    autoDistill: false,
+    labUpgrading: null,
+    researching: null,
     combat: {
       district: 0,
       wave: 1,
       best: 1,
       hero: { hp: 100, cooldown: 0 },
-      enemy: makeEnemy(0, 1),
+      enemies: makeEnemies(0, 1),
       reviving: 0,
     },
     lastSeen: Date.now(),
@@ -74,7 +106,7 @@ export function newGame(): GameState {
   return state;
 }
 
-function pushLog(state: GameState, msg: string) {
+export function pushLog(state: GameState, msg: string) {
   state.log.unshift(msg);
   if (state.log.length > 40) state.log.length = 40;
 }
@@ -87,7 +119,7 @@ function pushLog(state: GameState, msg: string) {
 export type CombatEvent =
   /** Le héros lance une attaque : une seule par cycle, avant ses coups. */
   | { type: 'swing' }
-  | { type: 'hit'; damage: number; crit: boolean }
+  | { type: 'hit'; damage: number; crit: boolean; targetIndex: number }
   | { type: 'taken'; damage: number }
   | { type: 'kill' };
 
@@ -107,6 +139,8 @@ export function step(
 ) {
   advanceDistillation(state, dt, rng);
   advanceCombat(state, dt, rng, sink);
+  advanceLabUpgrade(state, dt);
+  advanceResearch(state, dt);
 }
 
 function advanceDistillation(state: GameState, dt: number, rng: () => number) {
@@ -122,6 +156,7 @@ function advanceDistillation(state: GameState, dt: number, rng: () => number) {
 function advanceCombat(state: GameState, dt: number, rng: () => number, sink: EventSink) {
   const c = state.combat;
   const s = heroStats(state);
+  const mods = allMods(state);
 
   // Régénération et réanimation.
   if (c.reviving > 0) {
@@ -130,48 +165,68 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
     if (c.reviving <= 0) {
       c.hero.hp = s.health;
       c.wave = 1;
-      c.enemy = makeEnemy(c.district, c.wave, allMods(state).enemyDamageMult);
+      c.enemies = makeEnemies(c.district, c.wave, allMods(state).enemyDamageMult);
     }
     return;
   }
 
+  // Garde-fou : ne devrait jamais arriver, mais un tableau vide bloquerait
+  // le héros pour toujours plutôt que de planter.
+  if (c.enemies.length === 0) {
+    c.enemies = makeEnemies(c.district, c.wave, allMods(state).enemyDamageMult);
+  }
+
   c.hero.hp = Math.min(s.health, c.hero.hp + (s.health * s.condensation) / 100 * dt);
 
-  // Frappes du héros.
+  // Frappes du héros : toujours sur le premier ennemi encore vivant.
   c.hero.cooldown -= dt;
   const interval = attackInterval(s);
   let guard = 0;
   while (c.hero.cooldown <= 0 && guard++ < 20) {
+    const targetIndex = c.enemies.findIndex((e) => e.hp > 0);
+    if (targetIndex < 0) break;
+    const target = c.enemies[targetIndex];
     c.hero.cooldown += interval;
     sink({ type: 'swing' });
     const hits = 1 + (rng() < chainChance(s) ? 1 : 0);
     for (let i = 0; i < hits; i++) {
+      if (target.hp <= 0) break;
       const crit = rng() < critChance(s);
       const dmg = s.power * (crit ? 1 + s.rupture / 100 : 1);
-      c.enemy.hp -= dmg;
-      sink({ type: 'hit', damage: dmg, crit });
+      target.hp -= dmg;
+      sink({ type: 'hit', damage: dmg, crit, targetIndex });
       if (s.osmosis > 0) {
         c.hero.hp = Math.min(s.health, c.hero.hp + (dmg * s.osmosis) / 100);
       }
     }
-    if (c.enemy.hp <= 0) {
+    if (target.hp <= 0) {
       sink({ type: 'kill' });
+      // Un réactif garanti par ennemi tué : le vrai moteur de l'économie de réactifs
+      // depuis que les vagues à plusieurs ennemis existent (voir enemyCount).
+      state.resources.reagent += 1 * mods.reagentMult;
+      // Pièces d'or : plus rares que le réactif, seule monnaie du comptoir.
+      if (rng() < 0.15) state.resources.goldCoin += 1 + Math.floor(c.district / 2);
+    }
+    if (c.enemies.every((e) => e.hp <= 0)) {
       onWaveCleared(state, rng);
       return;
     }
   }
 
-  // Riposte de l'ennemi.
-  c.enemy.cooldown -= dt;
-  while (c.enemy.cooldown <= 0) {
-    c.enemy.cooldown += c.enemy.interval;
-    c.hero.hp -= c.enemy.damage;
-    sink({ type: 'taken', damage: c.enemy.damage });
-    if (c.hero.hp <= 0) {
-      c.hero.hp = 0;
-      c.reviving = 3;
-      pushLog(state, `Dissous par ${c.enemy.name}. Retour à l'entrée du district.`);
-      return;
+  // Riposte : chaque ennemi encore en vie attaque à sa propre cadence.
+  for (const enemy of c.enemies) {
+    if (enemy.hp <= 0) continue;
+    enemy.cooldown -= dt;
+    while (enemy.cooldown <= 0) {
+      enemy.cooldown += enemy.interval;
+      c.hero.hp -= enemy.damage;
+      sink({ type: 'taken', damage: enemy.damage });
+      if (c.hero.hp <= 0) {
+        c.hero.hp = 0;
+        c.reviving = 3;
+        pushLog(state, `Dissous par ${enemy.name}. Retour à l'entrée du district.`);
+        return;
+      }
     }
   }
 }
@@ -181,13 +236,22 @@ function onWaveCleared(state: GameState, rng: () => number) {
   const mods = allMods(state);
   const r = waveReward(c.district, c.wave);
   const guardian = c.wave >= WAVES_PER_DISTRICT;
+  const isNewBest = c.wave > c.best;
   state.resources.essence += r.essence * mods.essenceMult;
   if (rng() < r.reagentChance) {
     state.resources.reagent += Math.ceil(r.reagent * mods.reagentMult);
   }
   state.resources.insight += Math.floor(
-    insightReward(c.district, guardian, c.wave > c.best) * mods.insightMult,
+    insightReward(c.district, guardian, isNewBest) * mods.insightMult,
   );
+
+  // Contrat rempli : toutes les MISSION_WAVE_INTERVAL vagues d'un chapitre, une
+  // nouvelle meilleure vague rapporte des catalyseurs — la vraie récompense « on
+  // skip l'attente ».
+  if (isNewBest && c.wave % MISSION_WAVE_INTERVAL === 0 && c.wave < WAVES_PER_DISTRICT) {
+    state.resources.catalyst += MISSION_CATALYST_REWARD;
+    pushLog(state, `Contrat rempli : vague ${c.wave} nettoyée. +${MISSION_CATALYST_REWARD} catalyseurs.`);
+  }
 
   c.best = Math.max(c.best, c.wave);
   state.ascension.deepest = Math.max(state.ascension.deepest, c.district);
@@ -201,7 +265,7 @@ function onWaveCleared(state: GameState, rng: () => number) {
   } else {
     c.wave += 1;
   }
-  c.enemy = makeEnemy(c.district, c.wave, mods.enemyDamageMult);
+  c.enemies = makeEnemies(c.district, c.wave, mods.enemyDamageMult);
   c.hero.cooldown = 0;
 }
 
@@ -219,6 +283,13 @@ export function applyOffline(state: GameState, now = Date.now()): number {
     state.distilling.remaining = Math.max(0, state.distilling.remaining - seconds);
     if (state.distilling.remaining <= 0) collectDistillation(state);
   }
+  if (state.labUpgrading) {
+    state.labUpgrading.remaining = Math.max(0, state.labUpgrading.remaining - seconds);
+    if (state.labUpgrading.remaining <= 0) completeLabUpgrade(state);
+  }
+  if (state.researching) {
+    advanceResearch(state, seconds);
+  }
 
   // On estime le rythme de nettoyage à la vague courante, à efficacité réduite.
   const s = heroStats(state);
@@ -227,7 +298,9 @@ export function applyOffline(state: GameState, now = Date.now()): number {
   const kills = (seconds / Math.max(1, timeToKill)) * mods.offlineEfficiency;
   const r = waveReward(c.district, c.wave);
   const essence = kills * r.essence * mods.essenceMult;
-  const reagent = Math.floor(kills * r.reagentChance * r.reagent * mods.reagentMult);
+  // Chaque ennemi tué lâche ~1 réactif garanti (voir advanceCombat) : l'estimation
+  // hors-ligne suit désormais ce modèle plutôt que l'ancienne chance par vague.
+  const reagent = Math.floor(kills * mods.reagentMult);
   state.resources.essence += essence;
   state.resources.reagent += reagent;
   if (essence > 0) {
@@ -248,6 +321,21 @@ export function startDistillation(state: GameState, slot: SlotId): boolean {
   state.resources.reagent -= cost;
   const total = distillDuration(state.labLevel, allMods(state));
   state.distilling = { slot, remaining: total, total };
+  return true;
+}
+
+/** Le chaudron ne choisit pas la pièce : au clic, il en tire une au hasard. */
+export function startRandomDistillation(state: GameState): boolean {
+  const slot = SLOTS[Math.floor(Math.random() * SLOTS.length)].id;
+  return startDistillation(state, slot);
+}
+
+/** Dépense un catalyseur pour terminer la distillation en cours sur-le-champ. */
+export function skipDistillation(state: GameState): boolean {
+  if (!state.distilling || state.resources.catalyst < 1) return false;
+  state.resources.catalyst -= 1;
+  state.distilling.remaining = 0;
+  collectDistillation(state);
   return true;
 }
 
@@ -317,16 +405,19 @@ export function ascend(state: GameState): number {
   // Conservé : Lucidité, arbre de recherche, Éclats, legs, district le plus profond.
   state.resources.essence = 0;
   state.resources.reagent = 6;
+  state.resources.goldCoin = 0;
   state.labLevel = ascMods(state).startingLab;
   state.equipped = { flacon: makeItem('flacon', state.labLevel, () => 0.5, nextId()) };
   state.stash = [];
   state.distilling = null;
+  state.autoDistill = false;
+  state.labUpgrading = null;
   state.combat = {
     district: 0,
     wave: 1,
     best: 1,
     hero: { hp: 1, cooldown: 0 },
-    enemy: makeEnemy(0, 1, allMods(state).enemyDamageMult),
+    enemies: makeEnemies(0, 1, allMods(state).enemyDamageMult),
     reviving: 0,
   };
   state.combat.hero.hp = heroStats(state).health;
@@ -342,14 +433,48 @@ export function chooseCharacter(state: GameState, id: CharacterId) {
 }
 
 export function upgradeLab(state: GameState): boolean {
+  if (state.labUpgrading) return false;
   const cost = labUpgradeCost(state.labLevel);
-  if (state.resources.essence < cost.essence || state.resources.reagent < cost.reagent) {
-    return false;
-  }
+  if (state.resources.essence < cost.essence) return false;
   state.resources.essence -= cost.essence;
-  state.resources.reagent -= cost.reagent;
+  const total = labUpgradeDuration(state.labLevel);
+  state.labUpgrading = { remaining: total, total };
+  return true;
+}
+
+function advanceLabUpgrade(state: GameState, dt: number) {
+  const u = state.labUpgrading;
+  if (!u) return;
+  u.remaining -= dt;
+  if (u.remaining <= 0) completeLabUpgrade(state);
+}
+
+function completeLabUpgrade(state: GameState) {
+  if (!state.labUpgrading) return;
   state.labLevel += 1;
+  state.labUpgrading = null;
   pushLog(state, `Laboratoire porté au niveau ${state.labLevel}.`);
+}
+
+/** Dépense un catalyseur pour terminer l'amélioration du laboratoire sur-le-champ. */
+export function skipLabUpgrade(state: GameState): boolean {
+  if (!state.labUpgrading || state.resources.catalyst < 1) return false;
+  state.resources.catalyst -= 1;
+  state.labUpgrading.remaining = 0;
+  completeLabUpgrade(state);
+  return true;
+}
+
+export function setAutoDistill(state: GameState, on: boolean) {
+  state.autoDistill = on;
+}
+
+/** Achète un catalyseur en pièces d'or, coût croissant (voir `catalystShopCost`). */
+export function buyCatalyst(state: GameState): boolean {
+  const cost = catalystShopCost(state.resources.catalyst);
+  if (state.resources.goldCoin < cost) return false;
+  state.resources.goldCoin -= cost;
+  state.resources.catalyst += 1;
   return true;
 }
 

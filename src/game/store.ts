@@ -3,12 +3,19 @@ import {
   SAVE_VERSION,
   applyOffline,
   collectDistillation,
+  makeEnemies,
   newGame,
+  pushLog,
+  startRandomDistillation,
   step,
   type CombatEvent,
 } from './engine';
+import { distillCost } from './formulas';
+import { enemySprite } from './content';
 import { CHARACTERS, DEFAULT_CHARACTER } from './characters';
-import type { GameState } from './types';
+import type { Enemy, GameState } from './types';
+import { pushSave } from './api';
+import { authStore } from './auth';
 
 const KEY = 'brume.save.v1';
 /** Pas de simulation fixe : rend le combat déterministe quel que soit le framerate. */
@@ -19,6 +26,8 @@ export interface FloatingHit {
   id: number;
   damage: number;
   crit: boolean;
+  /** Index de l'ennemi visé, pour attribuer le bon éclat sur une vague à plusieurs ennemis. */
+  targetIndex: number;
   /** Horodatage de naissance (performance.now), pour le fondu. */
   born: number;
   /** Décalages aléatoires pour éviter que deux chiffres se superposent. */
@@ -89,6 +98,17 @@ class GameStore {
       if (this.state.distilling && this.state.distilling.remaining <= 0) {
         collectDistillation(this.state);
       }
+      // Boucle de distillation : relance seule une pièce au hasard tant qu'il reste
+      // des réactifs, s'arrête proprement dès qu'ils manquent.
+      if (!this.state.distilling && this.state.autoDistill) {
+        if (this.state.resources.reagent < distillCost(this.state.labLevel)) {
+          this.state.autoDistill = false;
+          pushLog(this.state, 'Distillation en boucle arrêtée : plus de réactifs.');
+        } else {
+          startRandomDistillation(this.state);
+        }
+        steps = Math.max(steps, 1);
+      }
       if (steps > 0) this.notify();
       this.raf = requestAnimationFrame(frame);
     };
@@ -111,6 +131,7 @@ class GameStore {
         id: ++this.hitId,
         damage: event.damage,
         crit: event.crit,
+        targetIndex: event.targetIndex,
         born: performance.now(),
         dx: Math.random() * 40 - 20,
         dy: Math.random() * 12,
@@ -131,6 +152,23 @@ class GameStore {
     } catch {
       /* quota plein ou stockage refusé : la partie continue en mémoire */
     }
+    // Le cloud est la source de vérité une fois connecté, mais l'écriture
+    // locale ci-dessus reste inconditionnelle : hors-ligne ou déconnecté,
+    // rien ne change.
+    const token = authStore.token;
+    if (token) {
+      pushSave(token, this.state).catch((err) => {
+        console.warn('Sauvegarde cloud échouée :', err);
+      });
+    }
+  }
+
+  /** Remplace l'état courant par une sauvegarde cloud (connexion sur un compte existant). */
+  loadFromCloud(state: GameState) {
+    const migrated = migrate(state);
+    this.state = migrated ?? newGame();
+    applyOffline(this.state);
+    this.notify();
   }
 
   reset() {
@@ -154,7 +192,7 @@ function load(): GameState | null {
  * Fait remonter une sauvegarde ancienne à la version courante. Une sauvegarde
  * qu'on ne sait pas convertir est abandonnée plutôt que chargée de travers.
  */
-function migrate(save: GameState): GameState | null {
+export function migrate(save: GameState): GameState | null {
   if (save.version === 1) {
     // v2 : arbre de recherche et sa monnaie.
     save.resources.insight = 0;
@@ -177,6 +215,34 @@ function migrate(save: GameState): GameState | null {
     // redemande le choix plutôt que d'en imposer un au hasard.
     if (!CHARACTERS.some((c) => c.id === save.character)) save.character = null;
     save.version = 5;
+  }
+  if (save.version === 5) {
+    // v6 : catalyseurs (récompense de contrat) et plusieurs ennemis par vague.
+    save.resources.catalyst = save.resources.catalyst ?? 0;
+    const combat = save.combat as unknown as { enemy?: Enemy; enemies?: Enemy[] };
+    if (!combat.enemies) {
+      if (combat.enemy) {
+        // Un vieux sprite n'existait pas : on lui donne celui de la vague en cours.
+        combat.enemy.sprite = combat.enemy.sprite ?? enemySprite(save.combat.district, save.combat.wave);
+        combat.enemies = [combat.enemy];
+      } else {
+        combat.enemies = makeEnemies(save.combat.district, save.combat.wave);
+      }
+      delete combat.enemy;
+    }
+    save.version = 6;
+  }
+  if (save.version === 6) {
+    // v7 : laboratoire et recherche minutés, boucle de distillation.
+    save.labUpgrading = null;
+    save.researching = null;
+    save.autoDistill = false;
+    save.version = 7;
+  }
+  if (save.version === 7) {
+    // v8 : pièces d'or, monnaie de combat distincte de l'essence pour le comptoir.
+    save.resources.goldCoin = save.resources.goldCoin ?? 0;
+    save.version = 8;
   }
   return save.version === SAVE_VERSION ? save : null;
 }

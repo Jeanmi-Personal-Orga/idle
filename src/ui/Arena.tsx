@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
-import { WAVES_PER_DISTRICT, cycleOf, enemySprite } from '../game/content';
+import { WAVES_PER_DISTRICT, cycleOf } from '../game/content';
 import { formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
@@ -36,9 +36,13 @@ export function Arena() {
   const c = state.combat;
 
   const hero = state.character ?? DEFAULT_CHARACTER;
-  const sprite = enemySprite(c.district, c.wave);
+  // Le premier ennemi du tableau est toujours la cible du héros et porte la
+  // mise en scène complète (marche, contact). Les suivants, sur une vague à
+  // plusieurs ennemis, se contentent d'un affichage plus simple à côté.
+  const sprite = c.enemies[0].sprite;
   // « Écho de soi » du Puits Prismatique : l'ennemi est le sprite du joueur.
   const foe = sprite === 'self' ? hero : sprite;
+  const extras = c.enemies.slice(1);
 
   const guardian = c.wave === WAVES_PER_DISTRICT;
   const heroStyle = spriteStyle(hero);
@@ -65,8 +69,11 @@ export function Arena() {
   // Frappes : impulsion vers l'adversaire au moment du coup.
   const heroStrike = usePulse(store.heroSwings, 220) && !dead;
   const foeStrike = usePulse(store.foeSwings, 220) && !dead;
-  // Impacts : la cible encaisse — éclat blanc et léger recul.
-  const foeHit = usePulse(store.hits.at(-1)?.id ?? 0, 150);
+  // Impacts : la cible encaisse — éclat blanc et léger recul. Sur une vague à
+  // plusieurs ennemis, on ne flashe que celui visé (targetIndex), sinon un coup
+  // sur le deuxième ennemi ferait sursauter le premier.
+  const lastHitOnMain = [...store.hits].reverse().find((h) => h.targetIndex === 0);
+  const foeHit = usePulse(lastHitOnMain?.id ?? 0, 150);
   const heroHit = usePulse(store.foeSwings, 170) && !dead;
 
   const heroAt = dead ? 0 : closed ? heroTravel : 0;
@@ -141,6 +148,11 @@ export function Arena() {
       {foeStyle === 'ranged' && (
         <Projectiles distance={gap} swings={store.foeSwings} color="#9ad6c0" />
       )}
+
+      {/* Vague de contrat : les ennemis en surnombre restent groupés, sans marche. */}
+      {extras.map((enemy, i) => (
+        <ExtraFoe key={i} enemy={enemy} index={i + 1} offset={(i + 1) * 26} />
+      ))}
     </div>
   );
 }
@@ -165,6 +177,41 @@ function foeAnim(walking: boolean, striking: boolean, hit: boolean): string {
   if (hit) return 'hurt';
   if (walking) return 'walk';
   return 'idle';
+}
+
+/**
+ * Ennemi en surnombre, sur une vague de contrat : pas de marche ni de mise en
+ * scène complète, juste une icône qui encaisse et flashe à son tour — le
+ * strict nécessaire pour rester lisible sans reconstruire toute la scène.
+ */
+function ExtraFoe({
+  enemy,
+  index,
+  offset,
+}: {
+  enemy: { hp: number; maxHp: number; sprite: string; name: string };
+  index: number;
+  offset: number;
+}) {
+  useGame();
+  const lastHit = [...store.hits].reverse().find((h) => h.targetIndex === index);
+  const hit = usePulse(lastHit?.id ?? 0, 150);
+  const dead = enemy.hp <= 0;
+  return (
+    <div
+      className={`fighter-slot foe extra ${dead ? 'fallen' : ''}`}
+      style={{ transform: `translateX(-${offset}px)`, opacity: dead ? 0.35 : 1 }}
+    >
+      <Sprite
+        character={enemy.sprite === 'self' ? DEFAULT_CHARACTER : enemy.sprite}
+        anim={dead ? 'death' : hit ? 'hurt' : 'idle'}
+        fallbackAnim={['idle']}
+        flip
+        className={hit ? 'flash' : ''}
+      />
+      {hit && <span className="impact" aria-hidden="true" />}
+    </div>
+  );
 }
 
 /**
