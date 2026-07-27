@@ -24,10 +24,27 @@ export type PurityId =
   | 'quintessence'
   | 'absolu';
 
-export type SlotId = 'flacon' | 'manteau' | 'lentille' | 'gantelet';
+/**
+ * Huit emplacements. Quatre donnent des dégâts, quatre donnent des points de
+ * vie ; dans les deux cas les statistiques secondaires sont tirées au hasard.
+ */
+export type SlotId =
+  | 'arme'
+  | 'gants'
+  | 'bottes'
+  | 'objet'
+  | 'veste'
+  | 'casque'
+  | 'pantalon'
+  | 'protection';
 
 export interface Item {
   id: string;
+  /**
+   * Étoiles gagnées par dissolution : une pièce forgée après deux dissolutions
+   * porte deux étoiles et tape bien plus fort qu'une pièce sans étoile.
+   */
+  stars: number;
   slot: SlotId;
   purity: PurityId;
   level: number;

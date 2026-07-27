@@ -1,7 +1,7 @@
-import { MISSION_CATALYST_REWARD, MISSION_WAVE_INTERVAL, SLOTS, WAVES_PER_DISTRICT, districtAt, districtLabel, enemySprite, purityIndex, slotDef } from './content';
+import { MISSION_CATALYST_REWARD, MISSION_WAVE_INTERVAL, PURITIES, SLOTS, purity, WAVES_PER_DISTRICT, districtAt, districtLabel, enemySprite, purityIndex, slotDef } from './content';
 import {
   attackInterval,
-  catalystShopCost,
+  hourglassShopCost,
   chainChance,
   critChance,
   distillCost,
@@ -13,20 +13,19 @@ import {
   enemyInterval,
   enemyName,
   heroStats,
-  itemScore,
   labUpgradeCost,
   labUpgradeDuration,
   makeItem,
   upgradeCost,
   waveReward,
 } from './formulas';
-import { ascMods, hasUnlockedAscension, shardGain } from './ascension';
+import { ascMods, canAscend, shardGain } from './ascension';
 import { mods as allMods } from './modifiers';
-import { advanceResearch, insightReward } from './tech';
+import { NEUTRAL_MODS, advanceResearch, insightReward } from './tech';
 import type { CharacterId } from './characters';
 import type { Enemy, GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 let idCounter = 0;
 const nextId = () => `i${Date.now().toString(36)}${(idCounter++).toString(36)}`;
@@ -101,8 +100,8 @@ export function newGame(): GameState {
     log: ["La brume s'épaissit. Le laboratoire est froid."],
   };
   // Un flacon de départ, sinon le héros ne peut rien tuer.
-  const starter = makeItem('flacon', 1, () => 0.5, nextId());
-  state.equipped.flacon = starter;
+  const starter = makeItem('arme', 1, () => 0.5, nextId());
+  state.equipped.arme = starter;
   return state;
 }
 
@@ -332,8 +331,8 @@ export function startRandomDistillation(state: GameState): boolean {
 
 /** Dépense un catalyseur pour terminer la distillation en cours sur-le-champ. */
 export function skipDistillation(state: GameState): boolean {
-  if (!state.distilling || state.resources.catalyst < 1) return false;
-  state.resources.catalyst -= 1;
+  if (!state.distilling || state.resources.shard < 1) return false;
+  state.resources.shard -= 1;
   state.distilling.remaining = 0;
   collectDistillation(state);
   return true;
@@ -344,15 +343,13 @@ export function collectDistillation(state: GameState, rng: () => number = Math.r
   if (!d || d.remaining > 0) return null;
   const item = makeItem(d.slot, state.labLevel, rng, nextId(), allMods(state));
   state.distilling = null;
-  const current = state.equipped[item.slot];
-  // Auto-équipe si le slot est vide ou si l'objet est franchement meilleur.
-  if (!current || itemScore(item) > itemScore(current)) {
-    if (current) state.stash.push(current);
-    state.equipped[item.slot] = item;
-    pushLog(state, `${slotDef(item.slot).name} ${purityIndex(item.purity) >= 3 ? '✦ ' : ''}équipé.`);
-  } else {
-    state.stash.push(item);
-  }
+  // Une pièce fabriquée ne s'équipe jamais toute seule, même meilleure : le
+  // joueur décide, après avoir vu son palier, son niveau et ses secondaires.
+  state.stash.push(item);
+  pushLog(
+    state,
+    `${slotDef(item.slot).name} ${purity(item.purity).name} niveau ${item.level} en réserve.`,
+  );
   return item;
 }
 
@@ -391,41 +388,68 @@ export function dissolveAll(state: GameState) {
 }
 
 /**
- * Dissout le laboratoire : la matière repart de zéro, la connaissance reste.
- * Retourne les Éclats gagnés, ou 0 si la dissolution n'était pas permise.
+ * Dissolution. Le laboratoire retombe à zéro et tout l'équipement est refondu au
+ * palier le plus bas — mais chaque pièce gagne **une étoile**, ce qui la rend
+ * durablement plus forte, et tout ce qui a été appris ou accumulé reste.
+ *
+ * | Repart de zéro | Reste intact |
+ * | --- | --- |
+ * | niveau du laboratoire, palier et niveau des pièces | monnaies, arbre de recherche, legs, chapitre et vague |
+ *
+ * Le prix : le laboratoire coûte 25 % de plus par étoile (voir `labUpgradeCost`).
  */
 export function ascend(state: GameState): number {
-  if (!hasUnlockedAscension(state)) return 0;
+  if (!canAscend(state)) return 0;
   const gain = shardGain(state);
-  if (gain <= 0) return 0;
 
   state.ascension.count += 1;
-  state.resources.shard += gain;
+  const stars = state.ascension.count;
 
-  // Conservé : Lucidité, arbre de recherche, Éclats, legs, district le plus profond.
-  state.resources.essence = 0;
-  state.resources.reagent = 6;
-  state.resources.goldCoin = 0;
+  // Le laboratoire seul repart de zéro : les monnaies, elles, sont conservées.
   state.labLevel = ascMods(state).startingLab;
-  state.equipped = { flacon: makeItem('flacon', state.labLevel, () => 0.5, nextId()) };
-  state.stash = [];
   state.distilling = null;
   state.autoDistill = false;
   state.labUpgrading = null;
-  state.combat = {
-    district: 0,
-    wave: 1,
-    best: 1,
-    hero: { hp: 1, cooldown: 0 },
-    enemies: makeEnemies(0, 1, allMods(state).enemyDamageMult),
-    reviving: 0,
-  };
+
+  // Tout l'équipement est refondu : palier le plus bas, niveau 1, secondaires
+  // retirées au hasard, et une étoile de plus. Les huit emplacements sont
+  // fournis — on ne repart jamais les mains vides.
+  state.equipped = {};
+  state.stash = [];
+  for (const slot of SLOTS) {
+    state.equipped[slot.id] = makeStarterItem(slot.id, stars);
+  }
+
+  // On ne bouge pas de chapitre : la vague repart au début du chapitre courant.
+  state.combat.wave = 1;
+  state.combat.best = 1;
+  state.combat.reviving = 0;
+  state.combat.enemies = makeEnemies(
+    state.combat.district,
+    1,
+    allMods(state).enemyDamageMult,
+  );
   state.combat.hero.hp = heroStats(state).health;
+
+  state.resources.catalyst += gain;
   pushLog(
     state,
-    `Dissolution n°${state.ascension.count} : ${gain} éclats. La brume se referme.`,
+    `Dissolution n°${stars} : +${gain} catalyseurs, équipement refondu à ${stars} étoile(s).`,
   );
   return gain;
+}
+
+/**
+ * Pièce de sortie de dissolution : palier le plus bas, niveau 1, deux
+ * secondaires au hasard, et les étoiles acquises.
+ */
+function makeStarterItem(slot: SlotId, stars: number): Item {
+  const item = makeItem(slot, 1, Math.random, nextId(), NEUTRAL_MODS, stars);
+  item.purity = PURITIES[0].id;
+  item.level = 1;
+  const def = slotDef(slot);
+  item.main = { key: def.main, value: def.mainBase };
+  return item;
 }
 
 export function chooseCharacter(state: GameState, id: CharacterId) {
@@ -434,7 +458,7 @@ export function chooseCharacter(state: GameState, id: CharacterId) {
 
 export function upgradeLab(state: GameState): boolean {
   if (state.labUpgrading) return false;
-  const cost = labUpgradeCost(state.labLevel);
+  const cost = labUpgradeCost(state.labLevel, state.ascension.count);
   if (state.resources.essence < cost.essence) return false;
   state.resources.essence -= cost.essence;
   const total = labUpgradeDuration(state.labLevel);
@@ -458,8 +482,8 @@ function completeLabUpgrade(state: GameState) {
 
 /** Dépense un catalyseur pour terminer l'amélioration du laboratoire sur-le-champ. */
 export function skipLabUpgrade(state: GameState): boolean {
-  if (!state.labUpgrading || state.resources.catalyst < 1) return false;
-  state.resources.catalyst -= 1;
+  if (!state.labUpgrading || state.resources.shard < 1) return false;
+  state.resources.shard -= 1;
   state.labUpgrading.remaining = 0;
   completeLabUpgrade(state);
   return true;
@@ -469,12 +493,12 @@ export function setAutoDistill(state: GameState, on: boolean) {
   state.autoDistill = on;
 }
 
-/** Achète un catalyseur en pièces d'or, coût croissant (voir `catalystShopCost`). */
+/** Achète un catalyseur en pièces d'or, coût croissant (voir `hourglassShopCost`). */
 export function buyCatalyst(state: GameState): boolean {
-  const cost = catalystShopCost(state.resources.catalyst);
+  const cost = hourglassShopCost(state.resources.shard);
   if (state.resources.goldCoin < cost) return false;
   state.resources.goldCoin -= cost;
-  state.resources.catalyst += 1;
+  state.resources.shard += 1;
   return true;
 }
 

@@ -244,6 +244,15 @@ export function migrate(save: GameState): GameState | null {
     save.resources.goldCoin = save.resources.goldCoin ?? 0;
     save.version = 8;
   }
+  if (save.version === 8) {
+    // v9 : huit emplacements, étoiles de dissolution, rôles des monnaies
+    // échangés. Les anciennes pièces (flacon, manteau, lentille, gantelet)
+    // n'existent plus : on refond l'équipement au palier le plus bas plutôt que
+    // de charger des emplacements fantômes.
+    save.equipped = {};
+    save.stash = [];
+    save.version = 9;
+  }
   return save.version === SAVE_VERSION ? save : null;
 }
 

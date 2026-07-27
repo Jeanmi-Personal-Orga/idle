@@ -11,7 +11,7 @@ import {
   nodeLevel,
   nodesOf,
   research,
-  researchWithCatalyst,
+  researchWithHourglass,
   totalInvested,
   type BranchId,
   type TechNode,
@@ -38,8 +38,8 @@ export function TechView() {
               <span className="res-insight">◇ {formatNum(state.resources.insight)}</span>{' '}
               {resourceDef('insight').name.toLowerCase()} ·{' '}
               {affordable > 0 ? `${affordable} nœud(s) à portée` : 'rien à portée'}
-              {state.resources.catalyst > 0 &&
-                ` · ${resourceDef('catalyst').icon} ${formatNum(state.resources.catalyst)}`}
+              {state.resources.shard > 0 &&
+                ` · ${resourceDef('shard').icon} ${formatNum(state.resources.catalyst)}`}
             </div>
           </div>
         </div>
@@ -133,12 +133,12 @@ function NodeCard({ node, color }: { node: TechNode; color: string }) {
               <div className="muted small">
                 Recherche en cours · {formatDuration(state.researching!.remaining)} restant
               </div>
-              {state.resources.catalyst > 0 && (
+              {state.resources.shard > 0 && (
                 <button
                   className="ghost"
-                  onClick={() => store.act((s) => researchWithCatalyst(s, node.id))}
+                  onClick={() => store.act((s) => researchWithHourglass(s, node.id))}
                 >
-                  ⧗ Passer avec un catalyseur
+                  ⧗ Passer avec un sablier
                 </button>
               )}
             </div>

@@ -69,54 +69,103 @@ export const purityIndex = (id: PurityId) =>
   PURITIES.findIndex((p) => p.id === id);
 export const purity = (id: PurityId) => PURITIES[purityIndex(id)];
 
-/** Slots : chacun impose sa statistique principale et sa palette de secondaires. */
+/**
+ * Les huit emplacements d'équipement. Quatre offensifs (dégâts), quatre
+ * défensifs (points de vie) ; les secondaires sont tirées au hasard dans un
+ * fonds commun, quel que soit l'emplacement.
+ */
 export const SLOTS: {
   id: SlotId;
   name: string;
   /** Article défini, pour écrire des phrases correctes dans l'interface. */
-  article: "le" | "la";
+  article: "le" | "la" | "les";
   flavor: string;
   main: StatKey;
   mainBase: number;
-  subs: StatKey[];
 }[] = [
   {
-    id: "flacon",
-    name: "Flacon",
-    article: "le",
-    flavor: "Le réactif projeté sur l'ennemi.",
+    id: "arme",
+    name: "Arme",
+    article: "la",
+    flavor: "Ce avec quoi tu frappes.",
     main: "power",
-    mainBase: 6,
-    subs: ["volatility", "chain", "clairvoyance", "rupture", "osmosis"],
+    mainBase: 8,
   },
   {
-    id: "manteau",
-    name: "Manteau",
+    id: "gants",
+    name: "Gants",
+    article: "les",
+    flavor: "Une meilleure prise, des coups plus secs.",
+    main: "power",
+    mainBase: 4,
+  },
+  {
+    id: "bottes",
+    name: "Bottes",
+    article: "les",
+    flavor: "Le poids du pas dans le coup.",
+    main: "power",
+    mainBase: 3.5,
+  },
+  {
+    id: "objet",
+    name: "Objet",
     article: "le",
-    flavor: "Une toile imbibée qui filtre la brume.",
+    flavor: "Montre, bague, amulette — ça compte quand même.",
+    main: "power",
+    mainBase: 5,
+  },
+  {
+    id: "veste",
+    name: "Veste",
+    article: "la",
+    flavor: "Ce qui reçoit les coups à ta place.",
+    main: "health",
+    mainBase: 55,
+  },
+  {
+    id: "casque",
+    name: "Casque",
+    article: "le",
+    flavor: "La tête est le morceau qu'on préfère garder.",
     main: "health",
     mainBase: 40,
-    subs: ["condensation", "osmosis", "health", "chain"],
   },
   {
-    id: "lentille",
-    name: "Lentille",
-    article: "la",
-    flavor: "Du verre taillé qui lit les failles.",
-    main: "clairvoyance",
-    mainBase: 2.5,
-    subs: ["rupture", "volatility", "clairvoyance", "power"],
-  },
-  {
-    id: "gantelet",
-    name: "Gantelet",
+    id: "pantalon",
+    name: "Pantalon",
     article: "le",
-    flavor: "Des tubes d'injection le long des doigts.",
-    main: "volatility",
-    mainBase: 4,
-    subs: ["chain", "volatility", "osmosis", "power"],
+    flavor: "Renforcé aux genoux, comme il se doit.",
+    main: "health",
+    mainBase: 35,
+  },
+  {
+    id: "protection",
+    name: "Protection",
+    article: "la",
+    flavor: "Plastron, bouclier, ce qui traîne de solide.",
+    main: "health",
+    mainBase: 50,
   },
 ];
+
+/**
+ * Fonds commun de statistiques secondaires. Elles sont tirées au hasard, donc
+ * deux pièces du même emplacement ne se ressemblent jamais.
+ */
+export const SUB_POOL: StatKey[] = [
+  "volatility",
+  "chain",
+  "osmosis",
+  "condensation",
+  "clairvoyance",
+  "rupture",
+  "power",
+  "health",
+];
+
+/** Deux secondaires sur chaque pièce, quel que soit son palier. */
+export const SUBS_PER_ITEM = 2;
 
 export const slotDef = (id: SlotId) => SLOTS.find((s) => s.id === id)!;
 

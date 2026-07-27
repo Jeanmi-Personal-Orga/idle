@@ -254,9 +254,9 @@ function completeResearch(state: GameState) {
 }
 
 /** Dépense un catalyseur pour terminer la recherche en cours sur-le-champ. */
-export function researchWithCatalyst(state: GameState, _id: string): boolean {
-  if (!state.researching || state.resources.catalyst < 1) return false;
-  state.resources.catalyst -= 1;
+export function researchWithHourglass(state: GameState, _id: string): boolean {
+  if (!state.researching || state.resources.shard < 1) return false;
+  state.resources.shard -= 1;
   completeResearch(state);
   return true;
 }
@@ -287,6 +287,8 @@ export interface TechMods {
   offlineCapHours: number;
   offlineEfficiency: number;
   insightMult: number;
+  /** Niveaux d'objet supplémentaires accessibles à la fabrication. */
+  itemLevelBonus: number;
 }
 
 export const NEUTRAL_MODS: TechMods = {
@@ -303,6 +305,7 @@ export const NEUTRAL_MODS: TechMods = {
   offlineCapHours: 8,
   offlineEfficiency: 0.6,
   insightMult: 1,
+  itemLevelBonus: 0,
 };
 
 export function techMods(state: GameState): TechMods {
@@ -328,6 +331,7 @@ export function techMods(state: GameState): TechMods {
     offlineCapHours: 8 + l('offline'),
     offlineEfficiency: 0.6 + 0.03 * l('offline'),
     insightMult: 1,
+    itemLevelBonus: 4 * l('item_level'),
   };
 }
 

@@ -7,6 +7,9 @@ import type { GameState } from './types';
  * l'arbre de recherche, la Lucidité, les Éclats et les legs achetés ici.
  */
 
+/** Niveau maximum du laboratoire : au-delà, il ne reste qu'à dissoudre. */
+export const LAB_MAX_LEVEL = 40;
+
 /** District à atteindre au moins une fois pour ouvrir la dissolution. */
 export const ASCEND_UNLOCK_DISTRICT = 2;
 
@@ -80,14 +83,14 @@ export const legacyCost = (legacy: Legacy, level: number) =>
 
 export function canBuyLegacy(state: GameState, legacy: Legacy): boolean {
   const lvl = legacyLevel(state, legacy.id);
-  return lvl < legacy.max && state.resources.shard >= legacyCost(legacy, lvl);
+  return lvl < legacy.max && state.resources.catalyst >= legacyCost(legacy, lvl);
 }
 
 export function buyLegacy(state: GameState, id: string): boolean {
   const legacy = legacyDef(id);
   if (!canBuyLegacy(state, legacy)) return false;
   const lvl = legacyLevel(state, id);
-  state.resources.shard -= legacyCost(legacy, lvl);
+  state.resources.catalyst -= legacyCost(legacy, lvl);
   state.ascension.legacies[id] = lvl + 1;
   return true;
 }
@@ -100,8 +103,13 @@ export function buyLegacyMax(state: GameState, id: string): number {
 
 // --- Gain et conditions ----------------------------------------------------
 
-export const hasUnlockedAscension = (state: GameState) =>
-  state.ascension.deepest >= ASCEND_UNLOCK_DISTRICT;
+/**
+ * Condition unique et lisible : le laboratoire doit être au maximum. Tant qu'il
+ * reste un niveau à bâtir, il y a mieux à faire que dissoudre.
+ */
+export const canAscend = (state: GameState) => state.labLevel >= LAB_MAX_LEVEL;
+
+export const hasUnlockedAscension = canAscend;
 
 /**
  * Éclats rendus par une dissolution. Chaque district franchi vaut environ le

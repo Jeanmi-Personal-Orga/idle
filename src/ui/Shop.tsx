@@ -1,5 +1,5 @@
 import { buyCatalyst, formatNum } from '../game/engine';
-import { catalystShopCost } from '../game/formulas';
+import { hourglassShopCost } from '../game/formulas';
 import { resourceDef } from '../game/resources';
 import { store, useGame } from '../game/store';
 
@@ -19,9 +19,9 @@ export function ShopView() {
 /** Petit comptoir secondaire : échange des pièces d'or accumulées contre un catalyseur. */
 export function CatalystShop() {
   const state = useGame();
-  const def = resourceDef('catalyst');
+  const def = resourceDef('shard');
   const coin = resourceDef('goldCoin');
-  const cost = catalystShopCost(state.resources.catalyst);
+  const cost = hourglassShopCost(state.resources.shard);
   const affordable = state.resources.goldCoin >= cost;
 
   return (

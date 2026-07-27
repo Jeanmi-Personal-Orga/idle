@@ -182,11 +182,11 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
                   : "Foyer éteint — il manque des réactifs"}
           </div>
           <div className="row">
-            {d && state.resources.catalyst > 0 && (
+            {d && state.resources.shard > 0 && (
               <button className="ghost" onClick={() => store.act((s) => skipDistillation(s))}>
                 ⧗ Finir avec un catalyseur
                 <span className="muted small">
-                  {resourceDef("catalyst").icon} {formatNum(state.resources.catalyst)}
+                  {resourceDef("shard").icon} {formatNum(state.resources.catalyst)}
                 </span>
               </button>
             )}
@@ -205,7 +205,7 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
               <div className="muted small">
                 Amélioration · {formatDuration(state.labUpgrading.remaining)} restant
               </div>
-              {state.resources.catalyst > 0 && (
+              {state.resources.shard > 0 && (
                 <button className="ghost" onClick={() => store.act((s) => skipLabUpgrade(s))}>
                   ⧗ Finir avec un catalyseur
                 </button>
@@ -422,7 +422,7 @@ function MissionPopup({ best, onClose }: { best: number; onClose: () => void }) 
             </div>
             <div className="row">
               <span className="res-catalyst">
-                {resourceDef("catalyst").icon} +{MISSION_CATALYST_REWARD} à la vague {target}
+                {resourceDef("shard").icon} +{MISSION_CATALYST_REWARD} à la vague {target}
               </span>
             </div>
           </>

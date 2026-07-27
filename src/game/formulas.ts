@@ -1,4 +1,12 @@
-import { PURITIES, WAVES_PER_DISTRICT, districtAt, purityIndex, slotDef } from './content';
+import {
+  PURITIES,
+  SUBS_PER_ITEM,
+  SUB_POOL,
+  WAVES_PER_DISTRICT,
+  districtAt,
+  purityIndex,
+  slotDef,
+} from './content';
 import { mods as allMods } from './modifiers';
 import { NEUTRAL_MODS, type TechMods } from './tech';
 import type { GameState, Item, PurityId, SlotId, StatKey, Stats } from './types';
@@ -30,10 +38,14 @@ export const levelMult = (level: number, percent = false) =>
 export const purityStatMult = (mult: number, percent: boolean) =>
   percent ? Math.pow(mult, 0.42) : mult;
 
+/** Chaque étoile vaut +60 % sur toute la pièce. */
+export const starMult = (stars: number) => 1 + 0.6 * stars;
+
 export function itemStats(item: Item): Stats {
   const out: Stats = {};
+  const stars = starMult(item.stars ?? 0);
   const add = (k: StatKey, v: number) =>
-    (out[k] = (out[k] ?? 0) + v * levelMult(item.level, isPercent(k)));
+    (out[k] = (out[k] ?? 0) + v * levelMult(item.level, isPercent(k)) * stars);
   add(item.main.key, item.main.value);
   for (const s of item.subs) add(s.key, s.value);
   return out;
@@ -138,22 +150,30 @@ export const upgradeCost = (item: Item, mods: TechMods = NEUTRAL_MODS) =>
       mods.refineMult,
   );
 
-/** Agrandir le laboratoire ne demande que de l'essence : les réactifs servent à fabriquer, pas à bâtir. */
-export const labUpgradeCost = (labLevel: number) => ({
-  essence: Math.ceil(120 * Math.pow(1.28, labLevel - 1)),
+/**
+ * Améliorer le laboratoire ne demande que de l'essence : les matériaux servent à
+ * fabriquer, pas à bâtir. Chaque étoile de dissolution renchérit les travaux de
+ * 25 % — le niveau 1 à 30 essences coûte 37,5 à une étoile.
+ */
+export const labUpgradeCost = (labLevel: number, stars = 0) => ({
+  essence: Math.ceil(30 * Math.pow(1.42, labLevel - 1) * Math.pow(1.25, stars)),
 });
 
-/** Durée de l'amélioration du laboratoire : rapide en début de partie, plafonnée ensuite. */
-export const labUpgradeDuration = (labLevel: number) => Math.min(180, 8 + labLevel * 1.5);
+/**
+ * Durée des travaux : quelques secondes au début, plusieurs heures en fin de
+ * parcours. C'est cette attente que les sabliers permettent de sauter.
+ */
+export const labUpgradeDuration = (labLevel: number) =>
+  Math.round(10 * Math.pow(1.28, labLevel - 1));
 
-/** Coût d'un catalyseur à la boutique, en essence : une vraie dépense, pas la source principale. */
-export const catalystShopCost = (owned: number) => Math.ceil(200 * Math.pow(1.6, owned));
+/**
+ * Coût d'un sablier à la boutique, en pièces d'or. Le sablier ne s'achète que là
+ * et se gagne en mission quotidienne : c'est la monnaie qui achète du temps.
+ */
+export const hourglassShopCost = (owned: number) => Math.ceil(60 * Math.pow(1.45, owned));
 
 /** Un seul réactif suffit à lancer une distillation, quel que soit le laboratoire : le hasard fait le reste. */
 export const distillCost = (_labLevel: number) => 1;
-
-/** Nombre de secondaires garanti par palier de pureté : rien en Trouble/Clair, une en Prismatique/Éthéré, deux à partir de Quintessence. */
-const SUB_COUNT_BY_PURITY = [0, 0, 1, 1, 2, 2];
 
 /** Durée d'une distillation : toujours courte, 2 à 3 s, pour que fabriquer reste un geste répété et non une attente. */
 export const distillDuration = (labLevel: number, mods: TechMods = NEUTRAL_MODS) =>
@@ -195,36 +215,52 @@ export function makeItem(
   rng: Rng,
   id: string,
   mods: TechMods = NEUTRAL_MODS,
+  stars = 0,
 ): Item {
   const def = slotDef(slot);
   const p = rollPurity(labLevel, rng, mods);
   const pi = purityIndex(p);
   const mult = PURITIES[pi].mult;
   const jitter = 0.85 + rng() * 0.3;
-  const subCount = Math.min(
-    4,
-    SUB_COUNT_BY_PURITY[pi] + (rng() < mods.subChance ? 1 : 0),
-  );
 
-  const pool = [...def.subs];
+  // Toujours deux secondaires, tirées dans le fonds commun : c'est le tirage qui
+  // fait la valeur d'une pièce, pas son palier seul.
+  const pool = SUB_POOL.filter((k) => k !== def.main);
   const subs: Item['subs'] = [];
-  for (let i = 0; i < subCount && pool.length; i++) {
+  for (let i = 0; i < SUBS_PER_ITEM && pool.length; i++) {
     const key = pool.splice(Math.floor(rng() * pool.length), 1)[0];
     const scale = purityStatMult(mult, isPercent(key));
     subs.push({ key, value: round(subStatBase(key) * scale * (0.7 + rng() * 0.6)) });
   }
 
+  // Le niveau sort de la fabrication, il n'est plus toujours 1 : le laboratoire
+  // et la recherche repoussent le plafond, sans jamais dépasser 100.
+  const ceiling = itemLevelCeiling(labLevel, mods);
+  const level = 1 + Math.floor(rng() * ceiling);
+
   return {
     id,
+    stars,
     slot,
     purity: p,
-    level: 1,
+    level: Math.min(ITEM_LEVEL_MAX, level),
     main: {
       key: def.main,
       value: round(def.mainBase * purityStatMult(mult, isPercent(def.main)) * jitter),
     },
     subs,
   };
+}
+
+/** Niveau maximum qu'une pièce peut atteindre, toutes sources confondues. */
+export const ITEM_LEVEL_MAX = 100;
+
+/**
+ * Plafond de niveau à la fabrication : le laboratoire le repousse, la recherche
+ * (`itemLevelBonus`) aussi. Un laboratoire neuf ne sort que du petit niveau.
+ */
+export function itemLevelCeiling(labLevel: number, mods: TechMods = NEUTRAL_MODS): number {
+  return Math.min(ITEM_LEVEL_MAX, Math.floor(3 + labLevel * 2.2 + mods.itemLevelBonus));
 }
 
 /** Valeur de référence d'une secondaire au palier Trouble. */
