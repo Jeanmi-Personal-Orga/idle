@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatNum } from './game/engine';
+import { RESOURCES, type ResourceId } from './game/resources';
 import { useGame, useGameLoop } from './game/store';
 import { BrumeView } from './ui/BrumeView';
 import { TechView } from './ui/TechView';
@@ -10,6 +11,7 @@ import { CharacterSelect } from './ui/CharacterSelect';
 import { AuthScreen } from './ui/AuthScreen';
 import { hasUnlockedAscension, shardGain } from './game/ascension';
 import { authStore, hasSkippedAuth, useAuth } from './game/auth';
+import type { GameState } from './game/types';
 
 type Tab = 'brume' | 'tech' | 'shop' | 'ascend';
 
@@ -19,6 +21,17 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'shop', label: 'Boutique', icon: '💰' },
   { id: 'ascend', label: 'Dissolution', icon: '✧' },
 ];
+
+/**
+ * Les ressources tardives ne s'affichent qu'une fois obtenues : un débutant n'a
+ * pas à se demander à quoi servent des reliques qu'il ne verra pas avant des
+ * heures.
+ */
+function visibleResource(state: GameState, id: ResourceId): boolean {
+  if (id === 'shard') return state.resources.shard > 0 || state.ascension.count > 0;
+  if (id === 'catalyst') return state.resources.catalyst > 0;
+  return true;
+}
 
 /** L'ancre de l'URL choisit l'onglet initial : #tech, #shop, #ascend. */
 function initialTab(): Tab {
@@ -67,26 +80,14 @@ export default function App() {
     <div className="app">
       <header>
         <div className="title">L'Alchimiste de Brume</div>
+        {/* Une seule source de vérité pour les ressources : leur nom, leur icône
+            et ce à quoi elles servent viennent de `resources.ts`. */}
         <div className="resources">
-          <span className="res-essence" title="Essence — affine et agrandit">
-            ✦ {formatNum(state.resources.essence)}
-          </span>
-          <span className="res-reagent" title="Réactifs — distillent de nouvelles pièces">
-            ◆ {formatNum(state.resources.reagent)}
-          </span>
-          <span className="res-insight" title="Lucidité — alimente la recherche">
-            ◇ {formatNum(state.resources.insight)}
-          </span>
-          {state.resources.goldCoin > 0 && (
-            <span className="res-gold-coin" title="Pièces d'or — tombent au combat, dépensées à la boutique">
-              💰 {formatNum(state.resources.goldCoin)}
+          {RESOURCES.filter((r) => visibleResource(state, r.id)).map((r) => (
+            <span key={r.id} className={`res-${r.id}`} title={`${r.name} — ${r.use}`}>
+              {r.icon} {formatNum(state.resources[r.id])}
             </span>
-          )}
-          {(state.resources.shard > 0 || state.ascension.count > 0) && (
-            <span className="res-shard" title="Éclats — scellent les legs permanents">
-              ✧ {formatNum(state.resources.shard)}
-            </span>
-          )}
+          ))}
         </div>
         {session ? (
           <div className="muted small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

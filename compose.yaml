@@ -1,6 +1,6 @@
 services:
   # --- Web : bundle statique servi par nginx sur http://localhost:8080 ---
-  # docker compose up web
+  # docker compose up web   (démarre aussi db et api : le compte joueur en a besoin)
   web:
     build:
       context: .
@@ -10,10 +10,12 @@ services:
     ports:
       # Port hôte surchargeable : WEB_PORT=8081 docker compose up web
       - '${WEB_PORT:-8080}:80'
+    depends_on:
+      - api
     restart: unless-stopped
 
   # --- Développement : vite avec rechargement à chaud sur http://localhost:5173 ---
-  # docker compose --profile dev up dev
+  # docker compose --profile dev up dev   (démarre aussi db et api)
   # Écoute sur 0.0.0.0 : l'URL est aussi ouvrable depuis un téléphone du même réseau.
   dev:
     build:
@@ -30,6 +32,8 @@ services:
       # compilés pour la machine ne sont pas compatibles avec Alpine. Docker
       # remplit ce volume nommé depuis l'image à sa première utilisation.
       - devmodules:/app/node_modules
+    depends_on:
+      - api
     profiles: ['dev']
 
   # --- Base de données : PostgreSQL pour les comptes joueurs ---

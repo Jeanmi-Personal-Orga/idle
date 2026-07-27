@@ -19,8 +19,8 @@ export interface ResourceDef {
 export const RESOURCES: ResourceDef[] = [
   {
     id: 'essence',
-    name: 'Or',
-    icon: '🪙',
+    name: 'Essence',
+    icon: '⚗️',
     color: 'var(--essence)',
     use: "Améliore l'équipement et agrandit le laboratoire.",
   },

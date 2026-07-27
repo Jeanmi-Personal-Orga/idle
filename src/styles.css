@@ -203,7 +203,7 @@ header {
 .res-catalyst {
   color: var(--catalyst);
 }
-.res-gold-coin {
+.res-goldCoin {
   color: var(--gold-coin);
 }
 
@@ -1247,4 +1247,12 @@ nav .icon {
     animation: none !important;
     transition: none !important;
   }
+}
+
+.res-goldCoin {
+  color: var(--gold-coin);
+}
+
+.res-catalyst {
+  color: var(--catalyst);
 }
