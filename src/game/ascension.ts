@@ -1,5 +1,5 @@
 import { WAVES_PER_DISTRICT } from './content';
-import { LAB_MAX } from './formulas';
+import { LAB_MAX } from './lab';
 import type { GameState } from './types';
 
 /**

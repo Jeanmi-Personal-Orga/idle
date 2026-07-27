@@ -1,6 +1,6 @@
 import { PURITIES, STATS, purity, slotDef } from '../game/content';
 import { formatNum } from '../game/engine';
-import { itemStats } from '../game/formulas';
+import { itemPower, itemStats } from '../game/formulas';
 import type { Item, SlotId } from '../game/types';
 
 /**
@@ -45,8 +45,11 @@ export function ItemCard({ item, actions }: { item: Item; actions?: React.ReactN
   const p = purity(item.purity);
   const stats = itemStats(item);
   const main = slotDef(item.slot).main;
-  // Une encoche par 5 niveaux d'affinage, lisible d'un coup d'œil (§5).
-  const notches = Math.min(8, Math.floor((item.level - 1) / 5));
+  // La puissance de la pièce, telle que la définit le jeu :
+  // (niveau du laboratoire × 10) × rareté × étoiles. C'est le seul nombre qui
+  // permette de comparer deux pièces d'emplacements différents.
+  const power = itemPower(item.level, item.purity, item.stars ?? 0);
+  const stars = item.stars ?? 0;
 
   return (
     <div
@@ -60,15 +63,12 @@ export function ItemCard({ item, actions }: { item: Item; actions?: React.ReactN
             {slotDef(item.slot).name}
           </div>
           <div className="muted small">
-            {p.name} · niv. {item.level}
+            {p.name} · labo {item.level}
+            {stars > 0 && <span className="stars"> {'★'.repeat(stars)}</span>}
           </div>
-          {notches > 0 && (
-            <div className="notches" aria-hidden="true">
-              {Array.from({ length: notches }, (_, i) => (
-                <i key={i} />
-              ))}
-            </div>
-          )}
+          <div className="small">
+            Puissance <b>{formatNum(power)}</b>
+          </div>
         </div>
         <div className="item-main">
           {formatNum(stats[main] ?? 0)}

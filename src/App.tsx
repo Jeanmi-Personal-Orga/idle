@@ -15,10 +15,12 @@ import type { GameState } from './game/types';
 
 type Tab = 'brume' | 'camp' | 'tech' | 'shop' | 'ascend';
 
+// Brume au centre : c'est l'onglet où l'on passe le plus de temps, donc celui qui
+// doit tomber sous le pouce.
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'shop', label: 'Boutique', icon: '💰' },
-  { id: 'brume', label: 'Brume', icon: '☁' },
   { id: 'camp', label: 'Campagnes', icon: '🗺' },
+  { id: 'brume', label: 'Brume', icon: '☁' },
   { id: 'tech', label: 'Recherche', icon: '◇' },
   { id: 'ascend', label: 'Dissolution', icon: '★' },
 ];
