@@ -87,6 +87,41 @@ function critter(col: number, line: number): Record<string, SpriteAnim> {
   return { idle: still, attack: still, hurt: still, death: still };
 }
 
+/**
+ * Une bande d'animation : un fichier par animation, les frames alignées
+ * horizontalement. C'est le format des packs d'ennemis (chauve-souris,
+ * champignon, golem, squelette), dont la largeur de frame diffère d'un pack à
+ * l'autre alors que la hauteur est toujours 64.
+ */
+function strip(sheet: string, frameW: number, frames: number, fps: number, loop = true): SpriteAnim {
+  return {
+    sheet,
+    cell: [frameW, 64],
+    cells: Array.from({ length: frames }, (_, i) => [i, 0] as [number, number]),
+    fps,
+    loop,
+  };
+}
+
+/**
+ * Un ennemi animé du dossier `foes/<nom>/` : cinq bandes, une par état. Les
+ * nombres de frames sont propres à chaque pack, d'où la table explicite.
+ */
+function beast(
+  dir: string,
+  frameW: number,
+  counts: { idle: number; walk: number; attack: number; hurt: number; death: number },
+): Record<string, SpriteAnim> {
+  const at = (name: string) => `/sprites/foes/${dir}/${name}.png`;
+  return {
+    idle: strip(at('idle'), frameW, counts.idle, 8),
+    walk: strip(at('walk'), frameW, counts.walk, 10),
+    attack: strip(at('attack'), frameW, counts.attack, 14, false),
+    hurt: strip(at('hurt'), frameW, counts.hurt, 12, false),
+    death: strip(at('death'), frameW, counts.death, 10, false),
+  };
+}
+
 /** Toutes les créatures du jeu, personnages jouables compris. */
 export const SPRITES: Record<string, Record<string, SpriteAnim>> = {
   // Jouables — et gardiens de fin de district.
@@ -94,6 +129,12 @@ export const SPRITES: Record<string, Record<string, SpriteAnim>> = {
   barbarian: character('barbarian'),
   'knight-a': character('knight-a'),
   'knight-b': character('knight-b'),
+
+  // Ennemis animés, un dossier de bandes chacun.
+  'chauve-souris': beast('bat', 64, { idle: 9, walk: 8, attack: 8, hurt: 5, death: 12 }),
+  champignon: beast('mushroom', 80, { idle: 7, walk: 8, attack: 10, hurt: 5, death: 15 }),
+  golem: beast('golem', 90, { idle: 8, walk: 10, attack: 11, hurt: 4, death: 13 }),
+  squelette: beast('skeleton', 96, { idle: 8, walk: 10, attack: 10, hurt: 5, death: 13 }),
 
   // Slimes, dans l'ordre de la planche.
   'slime-vert': slime(0),
@@ -124,7 +165,10 @@ export const SPRITES: Record<string, Record<string, SpriteAnim>> = {
 
 /** Hauteur d'affichage visée par famille, pour que les gabarits restent justes. */
 export function spriteHeight(id: string): number {
-  if (SPRITES[id]?.idle.cell[0] === 32) return 96; // personnages : 32 px × 3
+  const cell = SPRITES[id]?.idle.cell;
+  if (!cell) return 96;
+  if (cell[1] === 32) return 96; // personnages jouables : 32 px × 3
+  if (cell[1] === 64) return 104; // ennemis animés : bandes de 64 px de haut
   return 64; // icônes 96 px, dont le dessin n'occupe qu'une partie
 }
 

@@ -52,7 +52,7 @@ export const characterDef = (id: CharacterId) =>
  * lames. Les bestioles volantes, elles, tiennent leurs distances : c'est ce qui
  * force le joueur à traverser l'arène pour aller les chercher.
  */
-const RANGED = new Set(['araignee', 'abeille', 'papillon', 'hibou']);
+const RANGED = new Set(['araignee', 'abeille', 'papillon', 'hibou', 'chauve-souris']);
 
 export const spriteStyle = (sprite: string): CombatStyle =>
   RANGED.has(sprite) ? 'ranged' : 'melee';

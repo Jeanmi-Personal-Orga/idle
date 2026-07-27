@@ -188,37 +188,37 @@ export const DISTRICTS: {
   {
     name: 'Les Quais Bas',
     enemies: ['Rôdeur de vase', 'Noyé pâle', 'Nuée de brume'],
-    sprites: ['rat', 'slime-vert', 'knight-a'],
+    sprites: ['champignon', 'slime-vert', 'squelette'],
     blurb: "L'eau noire lèche des pontons pourris où rien ne reste immobile longtemps.",
   },
   {
     name: 'Le Marché Noyé',
     enemies: ['Marchand creux', 'Verrier fêlé', 'Chien de saumure'],
-    sprites: ['grenouille', 'slime-bleu', 'knight-b'],
+    sprites: ['chauve-souris', 'champignon', 'golem'],
     blurb: 'Des étals engloutis marchandent encore, pour des clients qui ne viendront plus.',
   },
   {
     name: 'La Verrerie',
     enemies: ['Souffleur brisé', 'Éclat animé', 'Four hurlant'],
-    sprites: ['araignee', 'slime-blanc', 'barbarian'],
+    sprites: ['squelette', 'slime-blanc', 'golem'],
     blurb: 'La chaleur des fours a fait fondre plus que le verre.',
   },
   {
     name: 'Les Citernes',
     enemies: ['Filtreur aveugle', 'Anguille de mercure', 'Gardien calcifié'],
-    sprites: ['ver', 'slime-gris', 'fighter'],
+    sprites: ['golem', 'chauve-souris', 'squelette'],
     blurb: "Sous la ville, l'eau qu'on filtrait autrefois a fini par filtrer autre chose.",
   },
   {
     name: "L'Observatoire",
     enemies: ['Astronome dissous', 'Prisme errant', 'Œil de brume'],
-    sprites: ['abeille', 'slime-violet', 'knight-a'],
+    sprites: ['chauve-souris', 'slime-violet', 'golem'],
     blurb: 'Des lentilles brisées regardent encore le ciel, et quelque chose regarde à travers.',
   },
   {
     name: 'Le Puits Prismatique',
     enemies: ['Écho de soi', 'Condensat', 'Le Distillateur'],
-    sprites: ['self', 'slime-rose', 'barbarian'],
+    sprites: ['self', 'champignon', 'squelette'],
     blurb: "Au fond du puits, la brume renvoie ton reflet — et il n'est pas seul.",
   },
 ];
