@@ -188,10 +188,26 @@ export const labUpgradeDuration = (labLevel: number) =>
   Math.round(10 * Math.pow(1.28, labLevel - 1));
 
 /**
- * Coût d'un sablier à la boutique, en pièces d'or. Le sablier ne s'achète que là
- * et se gagne en mission quotidienne : c'est la monnaie qui achète du temps.
+ * Ce que le comptoir vend contre des sacs d'or. Pas de temps ici : le temps
+ * s'achète depuis l'écran qui attend (laboratoire, recherche).
  */
-export const hourglassShopCost = (owned: number) => Math.ceil(60 * Math.pow(1.45, owned));
+export const GOLD_OFFERS: { resource: 'essence' | 'reagent' | 'insight'; amount: number; base: number }[] = [
+  { resource: 'reagent', amount: 10, base: 8 },
+  { resource: 'essence', amount: 250, base: 12 },
+  { resource: 'insight', amount: 5, base: 25 },
+];
+
+/** Le prix monte avec ce qu'on possède déjà : le comptoir dépanne, il ne nourrit pas. */
+export const goldOfferCost = (
+  offer: { base: number; amount: number },
+  owned: number,
+) => Math.ceil(offer.base * (1 + owned / (offer.amount * 12)));
+
+/**
+ * Prix en sacs d'or pour supprimer une attente. Il suit la durée restante : on
+ * paie ce qu'on économise, pas un forfait.
+ */
+export const skipCost = (secondsLeft: number) => Math.max(1, Math.ceil(secondsLeft / 45));
 
 /** Un seul réactif suffit à lancer une distillation, quel que soit le laboratoire : le hasard fait le reste. */
 export const distillCost = (_labLevel: number) => 1;
@@ -262,6 +278,9 @@ export function makeItem(
   return {
     id,
     stars,
+    // Une arme sur trois est une arme à distance : elle change la façon dont le
+    // combat se joue à l'écran, sans toucher aux chiffres.
+    ranged: slot === 'arme' ? rng() < 0.34 : undefined,
     slot,
     purity: p,
     level: Math.min(ITEM_LEVEL_MAX, level),

@@ -52,6 +52,11 @@ export interface Item {
   main: { key: StatKey; value: number };
   /** Statistiques secondaires tirées aléatoirement à la distillation. */
   subs: { key: StatKey; value: number }[];
+  /**
+   * Armes seulement : une arme à distance frappe sans avancer, une arme de mêlée
+   * oblige à traverser l'arène. Tiré à la fabrication.
+   */
+  ranged?: boolean;
 }
 
 export interface Distillation {
@@ -119,6 +124,20 @@ export interface CombatState {
   closing: number;
 }
 
+/**
+ * Ce que la boucle garde. Listes vides = tout est gardé : un filtre qu'on n'a
+ * pas réglé ne doit rien jeter.
+ */
+export interface LoopFilters {
+  /** Paliers conservés. */
+  tiers: PurityId[];
+  /**
+   * Statistiques secondaires conservées. Une seule correspondance suffit : une
+   * pièce dont une des deux secondaires est cochée part en réserve.
+   */
+  subs: StatKey[];
+}
+
 export interface GameState {
   version: number;
   /** Personnage choisi au début de l'aventure ; null tant qu'il ne l'est pas. */
@@ -133,6 +152,12 @@ export interface GameState {
   distilling: Distillation | null;
   /** Relance une distillation (pièce au hasard) dès que la précédente se termine, tant qu'il reste des réactifs. */
   autoDistill: boolean;
+  /**
+   * Filtres de la fabrication en boucle. Une pièce qui correspond part en
+   * réserve, les autres sont dissoutes sur-le-champ — sinon la boucle noie la
+   * réserve en quelques minutes.
+   */
+  loopFilters: LoopFilters;
   /** Amélioration du laboratoire en cours, minutée elle aussi. */
   labUpgrading: { remaining: number; total: number } | null;
   /** Recherche en cours (un seul nœud à la fois), minutée. */

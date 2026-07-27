@@ -9,7 +9,6 @@ import {
   districtLabel,
   nextMissionWave,
   purity,
-  SUB_POOL,
 } from "../game/content";
 import {
   collectDistillation,
@@ -22,29 +21,29 @@ import {
   skipDistillation,
   skipLabUpgrade,
   startRandomDistillation,
-  upgrade,
   upgradeLab,
 } from "../game/engine";
 import {
   distillCost,
-  distillDuration,
+  skipCost,
   powerScore,
   heroStats,
   itemScore,
   labUpgradeCost,
   labUpgradeDuration,
   purityWeights,
-  upgradeCost,
 } from "../game/formulas";
 import { mods as allMods, type Mods } from "../game/modifiers";
 import { DEFAULT_CHARACTER } from "../game/characters";
-import { resourceDef } from "../game/resources";
 import { store, useGame } from "../game/store";
 import type { PurityId, SlotId, StatKey } from "../game/types";
 import { Arena, FighterBar } from "./Arena";
 import { Cauldron } from "./Cauldron";
 import { ItemCard, PurityLegend, SlotIcon } from "./ItemCard";
 import { Sprite } from "./Sprite";
+import { Dropdown } from "./Filters";
+import { ResIcon } from "./ResIcon";
+import { SLOT_OPTIONS, SUB_OPTIONS, TIER_OPTIONS } from "../game/filter-options";
 
 const SHOWN: StatKey[] = [
   "power",
@@ -152,6 +151,7 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
   const finished = !!d && d.remaining <= 0;
   const ready = !d && state.resources.reagent >= cost;
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showLoop, setShowLoop] = useState(false);
 
   return (
     <div className="card scene compact lab-card">
@@ -169,7 +169,7 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
       <div className="row between">
         <div>
           <div className="label">
-            ⚗ Laboratoire · niveau {state.labLevel}
+            ⚗ Laboratoire
             {state.ascension.count > 0 && (
               <span className="stars" title={`${state.ascension.count} dissolution(s)`}>
                 {' '}
@@ -178,56 +178,61 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
               </span>
             )}
           </div>
-          <div className="muted small">
-            {finished
-              ? "Fiole pleine — touche le chaudron pour la ramasser"
-              : d
-                ? `${SLOTS.find((sl) => sl.id === d.slot)!.name} · ${formatDuration(d.remaining)} restant`
-                : ready
-                  ? `Touche le chaudron pour fabriquer une pièce au hasard — ${formatDuration(distillDuration(state.labLevel, mods))}`
-                  : "Foyer éteint — il manque des réactifs"}
-          </div>
           <div className="row">
-            {d && state.resources.shard > 0 && (
-              <button className="ghost" onClick={() => store.act((s) => skipDistillation(s))}>
-                ⧗ Finir avec un catalyseur
+            {d && (
+              <button
+                className="ghost"
+                disabled={state.resources.goldCoin < skipCost(d.remaining)}
+                onClick={() => store.act((s) => skipDistillation(s))}
+              >
+                Finir maintenant
                 <span className="muted small">
-                  {resourceDef("shard").icon} {formatNum(state.resources.catalyst)}
+                  {formatNum(skipCost(d.remaining))} <ResIcon id="goldCoin" size={14} />
                 </span>
               </button>
             )}
             <button
               className={`ghost ${state.autoDistill ? "active" : ""}`}
-              title="Fabriquer en boucle, tant qu'il reste des réactifs"
-              onClick={() => store.act((s) => setAutoDistill(s, !s.autoDistill))}
+              title="Fabriquer en boucle, et choisir ce qui est gardé"
+              onClick={() => setShowLoop(true)}
             >
               🔁 {state.autoDistill ? "En boucle" : "Boucle"}
             </button>
           </div>
         </div>
-        <div>
-          {state.labUpgrading ? (
-            <div className="right">
-              <div className="muted small">
-                Amélioration · {formatDuration(state.labUpgrading.remaining)} restant
-              </div>
-              {state.resources.shard > 0 && (
-                <button className="ghost" onClick={() => store.act((s) => skipLabUpgrade(s))}>
-                  ⧗ Finir avec un catalyseur
-                </button>
-              )}
-            </div>
-          ) : (
-            <button onClick={() => setShowUpgrade(true)}>Agrandir</button>
+        {/* Le bouton reste en place pendant les travaux : il se remplit et
+            affiche le temps restant, au lieu de disparaître. */}
+        <button className="upgrade-btn" onClick={() => setShowUpgrade(true)}>
+          {state.labUpgrading && (
+            <span
+              className="upgrade-fill"
+              style={{
+                width: `${
+                  (1 - state.labUpgrading.remaining / state.labUpgrading.total) * 100
+                }%`,
+              }}
+            />
           )}
-        </div>
+          <span className="upgrade-label">
+            Améliorer
+            <span className="muted small">
+              {state.labUpgrading
+                ? formatDuration(state.labUpgrading.remaining)
+                : `niveau ${state.labLevel + 1}`}
+            </span>
+          </span>
+        </button>
       </div>
+
+      {showLoop && <LoopPopup onClose={() => setShowLoop(false)} />}
 
       {showUpgrade && (
         <div className="modal-overlay" onClick={() => setShowUpgrade(false)}>
           <div className="card modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="row between">
-              <div className="label">Agrandir le laboratoire</div>
+              <div className="label">
+              {state.labUpgrading ? 'Travaux en cours' : 'Améliorer le laboratoire'}
+            </div>
               <button className="ghost" onClick={() => setShowUpgrade(false)}>✕</button>
             </div>
             <div className="muted small">
@@ -251,15 +256,35 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
             <div className="muted small">Après amélioration</div>
             <PurityOdds labLevel={state.labLevel + 1} mods={mods} />
 
-            <button
-              disabled={state.resources.essence < labCost.essence}
-              onClick={() => {
-                store.act(upgradeLab);
-                setShowUpgrade(false);
-              }}
-            >
-              Confirmer
-            </button>
+            {state.labUpgrading ? (
+              <div className="row">
+                <div className="muted small">
+                  {formatDuration(state.labUpgrading.remaining)} restant
+                </div>
+                <button
+                  disabled={
+                    state.resources.goldCoin < skipCost(state.labUpgrading.remaining)
+                  }
+                  onClick={() => store.act((st) => skipLabUpgrade(st))}
+                >
+                  Finir tout de suite
+                  <span className="muted small">
+                    {formatNum(skipCost(state.labUpgrading.remaining))}{' '}
+                    <ResIcon id="goldCoin" size={14} />
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <button
+                disabled={state.resources.essence < labCost.essence}
+                onClick={() => {
+                  store.act(upgradeLab);
+                  setShowUpgrade(false);
+                }}
+              >
+                Confirmer
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -292,7 +317,6 @@ function PurityOdds({ labLevel, mods }: { labLevel: number; mods: Mods }) {
 
 /** Équipement, en compact : équipé + réserve, mêmes actions que l'ancien onglet Élixirs. */
 function GearCard({ state }: { state: ReturnType<typeof useGame> }) {
-  const mods = allMods(state);
   const stash = [...state.stash].sort((a, b) => itemScore(b) - itemScore(a));
   // Une icône par emplacement ; cliquer en déplie les stats, sans occuper de
   // place tant qu'on ne regarde pas.
@@ -330,18 +354,7 @@ function GearCard({ state }: { state: ReturnType<typeof useGame> }) {
               <button className="ghost" onClick={() => setOpenSlot(null)}>✕</button>
             </div>
             {openItem ? (
-              <ItemCard
-                item={openItem}
-                actions={
-                  <button
-                    disabled={state.resources.essence < upgradeCost(openItem, mods)}
-                    onClick={() => store.act((st) => upgrade(st, openItem.id))}
-                  >
-                    Affiner{" "}
-                    <span className="muted small">{formatNum(upgradeCost(openItem, mods))} ess</span>
-                  </button>
-                }
-              />
+              <ItemCard item={openItem} />
             ) : (
               <div className="muted small">Vide — à distiller.</div>
             )}
@@ -362,23 +375,80 @@ function GearCard({ state }: { state: ReturnType<typeof useGame> }) {
 }
 
 /**
+ * Fabrication en boucle : l'interrupteur, et les filtres qui décident de ce
+ * qu'on garde. Ce qui n'est pas coché est dissous en sortant du chaudron — sinon
+ * la boucle remplit la réserve de rebut en quelques minutes.
+ */
+function LoopPopup({ onClose }: { onClose: () => void }) {
+  const state = useGame();
+  const f = state.loopFilters;
+  const set = (next: Partial<typeof f>) =>
+    store.act((st) => {
+      st.loopFilters = { ...st.loopFilters, ...next };
+    });
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="card modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="row between">
+          <div className="label">Fabrication en boucle</div>
+          <button className="ghost" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+
+        <div className="muted small">
+          Ce qui est coché part en réserve. Le reste est dissous en sortant du
+          chaudron. Rien de coché : tout est gardé.
+        </div>
+
+        <div className="filters">
+          <Dropdown
+            label="Paliers gardés"
+            options={TIER_OPTIONS}
+            selected={f.tiers}
+            onChange={(tiers) => set({ tiers })}
+          />
+          <Dropdown
+            label="Secondaires gardées"
+            options={SUB_OPTIONS}
+            selected={f.subs}
+            onChange={(subs) => set({ subs })}
+          />
+        </div>
+
+        <div className="muted small">
+          Une pièce suffit d'une seule secondaire cochée pour être gardée.
+        </div>
+
+        <button
+          className={state.autoDistill ? 'ghost' : 'ascend'}
+          onClick={() => store.act((st) => setAutoDistill(st, !st.autoDistill))}
+        >
+          {state.autoDistill ? 'Arrêter la boucle' : 'Lancer la boucle'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * La réserve, en grand : filtres par emplacement, par palier et par statistique
  * secondaire. Les filtres se combinent, et un compteur dit toujours combien de
  * pièces répondent.
  */
 function StashPopup({ onClose }: { onClose: () => void }) {
   const state = useGame();
-  const mods = allMods(state);
-  const [slot, setSlot] = useState<SlotId | null>(null);
-  const [tier, setTier] = useState<PurityId | null>(null);
-  const [sub, setSub] = useState<StatKey | null>(null);
+  const [slots, setSlots] = useState<SlotId[]>([]);
+  const [tiers, setTiers] = useState<PurityId[]>([]);
+  const [subs, setSubs] = useState<StatKey[]>([]);
 
   const shown = state.stash
-    .filter((i) => !slot || i.slot === slot)
-    .filter((i) => !tier || i.purity === tier)
-    // Une pièce passe si l'une de ses deux secondaires correspond : filtrer sur
-    // les deux à la fois ne laisserait presque rien.
-    .filter((i) => !sub || i.subs.some((x) => x.key === sub))
+    .filter((i) => !slots.length || slots.includes(i.slot))
+    .filter((i) => !tiers.length || tiers.includes(i.purity))
+    // Une pièce passe si l'une de ses deux secondaires est cochée : exiger les
+    // deux ne laisserait presque rien.
+    .filter((i) => !subs.length || i.subs.some((x) => subs.includes(x.key)))
     .sort((a, b) => itemScore(b) - itemScore(a));
 
   return (
@@ -393,44 +463,10 @@ function StashPopup({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="muted small">Emplacement</div>
-        <div className="subs">
-          <FilterChip on={!slot} onClick={() => setSlot(null)} label="Tous" />
-          {SLOTS.map((sl) => (
-            <FilterChip
-              key={sl.id}
-              on={slot === sl.id}
-              onClick={() => setSlot(slot === sl.id ? null : sl.id)}
-              label={sl.name}
-            />
-          ))}
-        </div>
-
-        <div className="muted small">Palier</div>
-        <div className="subs">
-          <FilterChip on={!tier} onClick={() => setTier(null)} label="Tous" />
-          {PURITIES.map((p) => (
-            <FilterChip
-              key={p.id}
-              on={tier === p.id}
-              onClick={() => setTier(tier === p.id ? null : p.id)}
-              label={p.name}
-              color={p.color}
-            />
-          ))}
-        </div>
-
-        <div className="muted small">Statistique secondaire</div>
-        <div className="subs">
-          <FilterChip on={!sub} onClick={() => setSub(null)} label="Toutes" />
-          {SUB_POOL.map((k) => (
-            <FilterChip
-              key={k}
-              on={sub === k}
-              onClick={() => setSub(sub === k ? null : k)}
-              label={STATS[k].name}
-            />
-          ))}
+        <div className="filters">
+          <Dropdown label="Emplacement" options={SLOT_OPTIONS} selected={slots} onChange={setSlots} />
+          <Dropdown label="Palier" options={TIER_OPTIONS} selected={tiers} onChange={setTiers} />
+          <Dropdown label="Secondaire" options={SUB_OPTIONS} selected={subs} onChange={setSubs} />
         </div>
 
         <div className="row between">
@@ -450,13 +486,6 @@ function StashPopup({ onClose }: { onClose: () => void }) {
               actions={
                 <>
                   <button onClick={() => store.act((st) => equip(st, item.id))}>Porter</button>
-                  <button
-                    disabled={state.resources.essence < upgradeCost(item, mods)}
-                    onClick={() => store.act((st) => upgrade(st, item.id))}
-                  >
-                    Améliorer{' '}
-                    <span className="muted small">{formatNum(upgradeCost(item, mods))} ess</span>
-                  </button>
                   <button className="ghost" onClick={() => store.act((st) => dissolve(st, item.id))}>
                     Dissoudre
                   </button>
@@ -470,28 +499,6 @@ function StashPopup({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Pastille de filtre : allumée quand elle est active. */
-function FilterChip({
-  on,
-  onClick,
-  label,
-  color,
-}: {
-  on: boolean;
-  onClick: () => void;
-  label: string;
-  color?: string;
-}) {
-  return (
-    <button
-      className={`chip ${on ? 'on' : ''}`}
-      onClick={onClick}
-      style={color && on ? { borderColor: color, color } : undefined}
-    >
-      {label}
-    </button>
-  );
-}
 
 /** Popup « ⓘ » : le visuel du héros, ses stats totales, et la pureté attendue. */
 function InfoPopup({ onClose }: { onClose: () => void }) {
@@ -575,7 +582,7 @@ function MissionPopup({ best, onClose }: { best: number; onClose: () => void }) 
             </div>
             <div className="row">
               <span className="res-catalyst">
-                {resourceDef("shard").icon} +{MISSION_CATALYST_REWARD} à la vague {target}
+                <ResIcon id="catalyst" size={14} /> +{MISSION_CATALYST_REWARD} à la vague {target}
               </span>
             </div>
           </>

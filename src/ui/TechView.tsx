@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatDuration, formatNum } from '../game/engine';
 import { resourceDef } from '../game/resources';
+import { ResIcon } from './ResIcon';
 import { store, useGame } from '../game/store';
 import {
   BRANCHES,
@@ -11,7 +12,7 @@ import {
   nodeLevel,
   nodesOf,
   research,
-  researchWithHourglass,
+  researchWithGold,
   totalInvested,
   type BranchId,
   type TechNode,
@@ -35,11 +36,11 @@ export function TechView() {
           <div>
             <div className="label">Recherche</div>
             <div className="muted small">
-              <span className="res-insight">◇ {formatNum(state.resources.insight)}</span>{' '}
+              <span className="res-insight">
+                <ResIcon id="insight" size={13} /> {formatNum(state.resources.insight)}
+              </span>{' '}
               {resourceDef('insight').name.toLowerCase()} ·{' '}
               {affordable > 0 ? `${affordable} nœud(s) à portée` : 'rien à portée'}
-              {state.resources.shard > 0 &&
-                ` · ${resourceDef('shard').icon} ${formatNum(state.resources.catalyst)}`}
             </div>
           </div>
         </div>
@@ -136,9 +137,9 @@ function NodeCard({ node, color }: { node: TechNode; color: string }) {
               {state.resources.shard > 0 && (
                 <button
                   className="ghost"
-                  onClick={() => store.act((s) => researchWithHourglass(s, node.id))}
+                  onClick={() => store.act((s) => researchWithGold(s, node.id))}
                 >
-                  ⧗ Passer avec un sablier
+                  Finir avec de l'or
                 </button>
               )}
             </div>

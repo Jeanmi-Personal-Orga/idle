@@ -1,7 +1,9 @@
 import { MISSION_CATALYST_REWARD, MISSION_WAVE_INTERVAL, PURITIES, SLOTS, purity, WAVES_PER_DISTRICT, districtAt, districtLabel, enemySprite, purityIndex, slotDef } from './content';
 import {
   attackInterval,
-  hourglassShopCost,
+  GOLD_OFFERS,
+  goldOfferCost,
+  skipCost,
   chainChance,
   critChance,
   distillCost,
@@ -16,22 +18,45 @@ import {
   labUpgradeCost,
   labUpgradeDuration,
   makeItem,
-  upgradeCost,
   waveReward,
 } from './formulas';
 import { ascMods, canAscend, shardGain } from './ascension';
 import { mods as allMods } from './modifiers';
 import { NEUTRAL_MODS, advanceResearch, insightReward } from './tech';
+import { spriteStyle } from './characters';
 import type { CharacterId } from './characters';
 import type { Enemy, GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 
 /**
- * Temps de marche jusqu'au contact, en secondes. Vaut pour les deux camps : la
- * vague ne commence vraiment qu'une fois les combattants face à face.
+ * Temps qu'il faut pour traverser toute l'arène, en secondes. Les deux camps
+ * marchent à la **même vitesse** : celui qui doit couvrir la moitié du chemin
+ * met donc deux fois moins de temps.
  */
-export const CLOSING_TIME = 1.1;
+export const CLOSING_TIME = 1.4;
+
+/** Vrai si l'arme équipée frappe sans avoir besoin d'approcher. */
+export const heroIsRanged = (state: GameState) => Boolean(state.equipped.arme?.ranged);
+
+/**
+ * Durée d'approche de la vague : proportionnelle à la distance que le marcheur
+ * doit réellement couvrir, à vitesse égale.
+ *
+ * - deux combattants au contact se rejoignent au milieu → moitié du temps ;
+ * - un seul avance → il fait tout le chemin, temps plein ;
+ * - deux combattants à distance ne bougent pas → on frappe tout de suite.
+ */
+export function closingTime(state: GameState): number {
+  const heroRanged = heroIsRanged(state);
+  const foeRanged = state.combat.enemies.every((e) => spriteStyle(e.sprite) === 'ranged');
+  // Personne à déplacer : le combat commence immédiatement.
+  if (heroRanged && foeRanged) return 0;
+  // Le héros reste en arrière : l'ennemi traverse toute l'arène.
+  if (heroRanged) return CLOSING_TIME;
+  // Le héros avance jusqu'à sa marque, à mi-distance.
+  return CLOSING_TIME / 2;
+}
 
 let idCounter = 0;
 const nextId = () => `i${Date.now().toString(36)}${(idCounter++).toString(36)}`;
@@ -91,6 +116,7 @@ export function newGame(): GameState {
     stash: [],
     distilling: null,
     autoDistill: false,
+    loopFilters: { tiers: [], subs: [] },
     labUpgrading: null,
     researching: null,
     combat: {
@@ -100,7 +126,7 @@ export function newGame(): GameState {
       hero: { hp: 100, cooldown: 0 },
       enemies: makeEnemies(0, 1),
       reviving: 0,
-      closing: CLOSING_TIME,
+      closing: CLOSING_TIME / 2,
     },
     lastSeen: Date.now(),
     essenceRate: 0,
@@ -172,7 +198,7 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
       c.hero.hp = s.health;
       c.wave = 1;
       c.enemies = makeEnemies(c.district, c.wave, allMods(state).enemyDamageMult);
-      c.closing = CLOSING_TIME;
+      c.closing = closingTime(state);
     }
     return;
   }
@@ -284,7 +310,7 @@ function onWaveCleared(state: GameState, rng: () => number) {
   c.enemies = makeEnemies(c.district, c.wave, mods.enemyDamageMult);
   c.hero.cooldown = 0;
   // La vague suivante commence par la marche, pas par un coup.
-  c.closing = CLOSING_TIME;
+  c.closing = closingTime(state);
 }
 
 /** Crédite une partie des gains accumulés hors-ligne. */
@@ -350,8 +376,10 @@ export function startRandomDistillation(state: GameState): boolean {
 
 /** Dépense un catalyseur pour terminer la distillation en cours sur-le-champ. */
 export function skipDistillation(state: GameState): boolean {
-  if (!state.distilling || state.resources.shard < 1) return false;
-  state.resources.shard -= 1;
+  if (!state.distilling) return false;
+  const cost = skipCost(state.distilling.remaining);
+  if (state.resources.goldCoin < cost) return false;
+  state.resources.goldCoin -= cost;
   state.distilling.remaining = 0;
   collectDistillation(state);
   return true;
@@ -362,14 +390,33 @@ export function collectDistillation(state: GameState, rng: () => number = Math.r
   if (!d || d.remaining > 0) return null;
   const item = makeItem(d.slot, state.labLevel, rng, nextId(), allMods(state));
   state.distilling = null;
-  // Une pièce fabriquée ne s'équipe jamais toute seule, même meilleure : le
-  // joueur décide, après avoir vu son palier, son niveau et ses secondaires.
+
+  // En boucle, les pièces qui ne passent pas les filtres sont dissoutes tout de
+  // suite : sans ça, quelques minutes de fabrication noient la réserve.
+  if (state.autoDistill && !passesLoopFilters(state, item)) {
+    state.resources.essence += dissolveValue(item);
+    return item;
+  }
+
+  // Une pièce gardée ne s'équipe jamais toute seule, même meilleure : le joueur
+  // décide, après avoir vu son palier, son niveau et ses secondaires.
   state.stash.push(item);
   pushLog(
     state,
     `${slotDef(item.slot).name} ${purity(item.purity).name} niveau ${item.level} en réserve.`,
   );
   return item;
+}
+
+/**
+ * Une pièce passe les filtres de boucle si son palier est coché **et** si l'une
+ * de ses deux secondaires est cochée. Une liste vide ne filtre rien.
+ */
+export function passesLoopFilters(state: GameState, item: Item): boolean {
+  const f = state.loopFilters ?? { tiers: [], subs: [] };
+  if (f.tiers.length && !f.tiers.includes(item.purity)) return false;
+  if (f.subs.length && !item.subs.some((sub) => f.subs.includes(sub.key))) return false;
+  return true;
 }
 
 export function equip(state: GameState, itemId: string) {
@@ -382,23 +429,22 @@ export function equip(state: GameState, itemId: string) {
   state.equipped[item.slot] = item;
 }
 
-export function upgrade(state: GameState, itemId: string): boolean {
-  const item = findItem(state, itemId);
-  if (!item) return false;
-  const cost = upgradeCost(item, allMods(state));
-  if (state.resources.essence < cost) return false;
-  state.resources.essence -= cost;
-  item.level += 1;
-  return true;
+
+/**
+ * Ce que rapporte une pièce dissoute, en essence. Le palier compte plus que le
+ * niveau : une pièce rare mal tirée vaut quand même quelque chose.
+ */
+export function dissolveValue(item: Item): number {
+  return Math.ceil(4 + purityIndex(item.purity) * 8 + item.level * 0.8);
 }
 
-/** Dissout un objet de la réserve en réactifs. */
+/** Dissout un objet de la réserve : il rend de l'essence. */
 export function dissolve(state: GameState, itemId: string): boolean {
   const idx = state.stash.findIndex((i) => i.id === itemId);
   if (idx < 0) return false;
   const item = state.stash[idx];
   state.stash.splice(idx, 1);
-  state.resources.reagent += 2 + purityIndex(item.purity) * 4 + (item.level - 1);
+  state.resources.essence += dissolveValue(item);
   return true;
 }
 
@@ -501,10 +547,22 @@ function completeLabUpgrade(state: GameState) {
 
 /** Dépense un catalyseur pour terminer l'amélioration du laboratoire sur-le-champ. */
 export function skipLabUpgrade(state: GameState): boolean {
-  if (!state.labUpgrading || state.resources.shard < 1) return false;
-  state.resources.shard -= 1;
-  state.labUpgrading.remaining = 0;
+  if (!state.labUpgrading) return false;
+  const cost = skipCost(state.labUpgrading.remaining);
+  if (state.resources.goldCoin < cost) return false;
+  state.resources.goldCoin -= cost;
   completeLabUpgrade(state);
+  return true;
+}
+
+/** Achat au comptoir : des sacs d'or contre de la matière ou du savoir. */
+export function buyWithGold(state: GameState, resource: 'essence' | 'reagent' | 'insight'): boolean {
+  const offer = GOLD_OFFERS.find((o) => o.resource === resource);
+  if (!offer) return false;
+  const cost = goldOfferCost(offer, state.resources[resource]);
+  if (state.resources.goldCoin < cost) return false;
+  state.resources.goldCoin -= cost;
+  state.resources[resource] += offer.amount;
   return true;
 }
 
@@ -512,19 +570,7 @@ export function setAutoDistill(state: GameState, on: boolean) {
   state.autoDistill = on;
 }
 
-/** Achète un catalyseur en pièces d'or, coût croissant (voir `hourglassShopCost`). */
-export function buyCatalyst(state: GameState): boolean {
-  const cost = hourglassShopCost(state.resources.shard);
-  if (state.resources.goldCoin < cost) return false;
-  state.resources.goldCoin -= cost;
-  state.resources.shard += 1;
-  return true;
-}
 
-function findItem(state: GameState, id: string): Item | undefined {
-  for (const item of Object.values(state.equipped)) if (item?.id === id) return item;
-  return state.stash.find((i) => i.id === id);
-}
 
 // --- Formatage -------------------------------------------------------------
 

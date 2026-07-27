@@ -258,6 +258,11 @@ export function migrate(save: GameState): GameState | null {
     save.combat.closing = 0;
     save.version = 10;
   }
+  if (save.version === 10) {
+    // v11 : filtres de la fabrication en boucle.
+    save.loopFilters = save.loopFilters ?? { tiers: [], subs: [] };
+    save.version = 11;
+  }
   return save.version === SAVE_VERSION ? save : null;
 }
 

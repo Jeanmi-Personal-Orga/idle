@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatNum } from './game/engine';
 import { RESOURCES, type ResourceId } from './game/resources';
+import { ResIcon } from './ui/ResIcon';
 import { useGame, useGameLoop } from './game/store';
 import { BrumeView } from './ui/BrumeView';
 import { TechView } from './ui/TechView';
@@ -82,7 +83,7 @@ export default function App() {
         <div className="resources">
           {RESOURCES.filter((r) => visibleResource(state, r.id)).map((r) => (
             <span key={r.id} className={`res-${r.id}`} title={`${r.name} — ${r.use}`}>
-              {r.icon} {formatNum(state.resources[r.id])}
+              <ResIcon id={r.id} /> {formatNum(state.resources[r.id])}
             </span>
           ))}
         </div>

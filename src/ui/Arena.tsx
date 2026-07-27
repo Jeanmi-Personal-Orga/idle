@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
 import { WAVES_PER_DISTRICT, cycleOf } from '../game/content';
-import { CLOSING_TIME, formatNum } from '../game/engine';
+import { closingTime, formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
 import { Sprite } from './Sprite';
@@ -43,7 +43,8 @@ export function Arena() {
   const extras = c.enemies.slice(1);
 
   const guardian = c.wave === WAVES_PER_DISTRICT;
-  const heroStyle = spriteStyle(hero);
+  // C'est l'arme équipée qui décide : de mêlée, il faut traverser.
+  const heroStyle = state.equipped.arme?.ranged ? 'ranged' : 'melee';
   const foeStyle = spriteStyle(foe);
   const dead = c.reviving > 0;
 
@@ -52,18 +53,23 @@ export function Arena() {
   const foeRef = useRef<HTMLDivElement>(null);
   const gap = useGap(arenaRef, heroRef, foeRef, [c.district, c.wave, hero, foe]);
 
-  // Le héros tient sa place : il ne fait qu'un quart du chemin, et c'est
-  // l'ennemi qui vient le trouver. Un combattant à distance ne bouge pas.
-  const heroTravel = heroStyle === 'melee' ? gap * 0.25 : 0;
+  // Même vitesse de déplacement pour tout le monde. Une arme de mêlée envoie le
+  // héros à sa marque, à mi-distance, et il y reste : les vagues suivantes
+  // viennent à lui. Une arme à distance le laisse en arrière, et c'est l'ennemi
+  // qui traverse toute l'arène.
+  const heroTravel = heroStyle === 'melee' ? gap / 2 : 0;
   const foeTravel = foeStyle === 'melee' ? gap - heroTravel : 0;
-  const walkMs = CLOSING_TIME * 1000;
+  // La marche dure exactement l'approche accordée par le moteur, et se joue
+  // pendant son décompte : à l'arrivée, les coups partent.
+  const walkMs = Math.max(120, closingTime(state) * 1000);
 
-  // C'est le moteur qui dit si l'on est au contact : l'affichage n'a plus sa
-  // propre minuterie, donc un coup ne peut plus partir avant l'arrivée.
-  const closed = (c.closing ?? 0) <= 0 && !dead;
+  // L'ennemi marche pendant tout le décompte du moteur : `closed` sert de cible
+  // de déplacement, pas de signal d'arrivée — il vaut donc vrai dès le départ.
+  const closed = !dead;
+  const walking = (c.closing ?? 0) > 0 && !dead;
 
-  const heroWalking = !dead && !closed && heroTravel > 0;
-  const foeWalking = !dead && !closed && foeTravel > 0;
+  const heroWalking = walking && heroTravel > 0;
+  const foeWalking = walking && foeTravel > 0;
 
   // Frappes : impulsion vers l'adversaire au moment du coup.
   const heroStrike = usePulse(store.heroSwings, 220) && !dead;
@@ -75,11 +81,12 @@ export function Arena() {
   const foeHit = usePulse(lastHitOnMain?.id ?? 0, 150);
   const heroHit = usePulse(store.foeSwings, 170) && !dead;
 
-  // Même mort, le héros reste où il est tombé : rien ne se téléporte.
-  const heroAt = closed && !dead ? heroTravel : heroTravel;
-  const foeAt = dead ? 0 : closed ? foeTravel : 0;
+  // Le héros gagne sa marque et l'occupe : plus de retour au point de départ
+  // entre deux vagues, donc plus de saut.
+  const heroAt = dead ? 0 : heroTravel;
   const heroX = heroAt + (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
-  const foeX = -(foeAt + (foeStrike ? 7 : 0) - (foeHit ? 5 : 0));
+  // Seuls les à-coups de combat restent dans `foeX` ; l'approche est animée.
+  const foeX = -((foeStrike ? 7 : 0) - (foeHit ? 5 : 0));
   // La marche est lente et régulière ; les à-coups de combat sont brefs et secs.
   const heroMoving = heroWalking || (closed && !heroStrike && !heroHit);
   const foeMoving = foeWalking || (closed && !foeStrike && !foeHit);
@@ -119,14 +126,29 @@ export function Arena() {
       </div>
 
       <div className="fighter-slot foe" ref={foeRef}>
+        {/*
+          La boîte de déplacement est recréée à chaque vague (`key`) : l'animation
+          d'approche repart donc de l'entrée de l'arène. Une simple transition
+          n'aurait rien joué, puisque l'élément survivait d'une vague à l'autre
+          et se trouvait déjà à destination.
+        */}
         <div
-          className="mover"
+          key={`${c.district}-${c.wave}`}
+          className={`mover ${foeTravel > 0 ? 'approaching' : ''}`}
           style={{
-            transform: `translateX(${foeX}px)`,
-            transitionDuration: foeMoving ? `${walkMs}ms` : '110ms',
-            transitionTimingFunction: foeMoving ? 'linear' : 'ease-out',
+            ['--to' as string]: `${-foeTravel}px`,
+            animationDuration: `${walkMs}ms`,
+            // Les à-coups de frappe se jouent par-dessus, une fois arrivé.
+            transform: foeTravel > 0 ? undefined : 'translateX(0)',
           }}
         >
+          <div
+            className="lunge"
+            style={{
+              transform: `translateX(${foeX}px)`,
+              transitionDuration: foeMoving ? `${walkMs}ms` : '110ms',
+            }}
+          >
           <Sprite
             character={foe}
             anim={foeAnim(foeWalking, foeStrike, foeHit)}
@@ -136,8 +158,8 @@ export function Arena() {
             className={`foe enter ${cycleOf(c.district) > 0 ? 'cycled' : ''} ${
               foeStyle === 'ranged' ? 'flyer' : ''
             } ${foeHit ? 'flash' : ''}`}
-            key={`${c.district}-${c.wave}`}
           />
+          </div>
           {/* L'éclat au point d'impact : sans lui, on ne voit pas le coup porter. */}
           {foeHit && <span className="impact" aria-hidden="true" />}
           <FloatingHits />

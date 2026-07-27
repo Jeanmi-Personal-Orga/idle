@@ -1,3 +1,4 @@
+import { skipCost } from './formulas';
 import type { GameState, StatKey } from './types';
 
 /**
@@ -219,10 +220,14 @@ export function canResearch(state: GameState, node: TechNode): boolean {
   );
 }
 
-/** Durée d'une recherche : suit la courbe de coût du nœud, plafonnée pour rester raisonnable. */
+/**
+ * Durée d'une recherche. Chercher est un investissement de fond : quelques
+ * minutes au début, plusieurs heures pour les derniers niveaux. C'est cette
+ * attente que les sacs d'or permettent d'acheter.
+ */
 export function researchDuration(node: TechNode, level: number): number {
   const cost = nodeCost(node, level);
-  return Math.min(150, 4 + Math.sqrt(cost) * 1.8);
+  return Math.round(Math.min(6 * 3600, 60 + Math.pow(cost, 0.85) * 12));
 }
 
 /** Lance une recherche minutée (un seul nœud à la fois). */
@@ -253,10 +258,15 @@ function completeResearch(state: GameState) {
   state.researching = null;
 }
 
-/** Dépense un catalyseur pour terminer la recherche en cours sur-le-champ. */
-export function researchWithHourglass(state: GameState, _id: string): boolean {
-  if (!state.researching || state.resources.shard < 1) return false;
-  state.resources.shard -= 1;
+/**
+ * Termine la recherche en cours sur-le-champ, contre des sacs d'or. Le prix suit
+ * le temps restant : on paie ce qu'on économise.
+ */
+export function researchWithGold(state: GameState, _id: string): boolean {
+  if (!state.researching) return false;
+  const cost = skipCost(state.researching.remaining);
+  if (state.resources.goldCoin < cost) return false;
+  state.resources.goldCoin -= cost;
   completeResearch(state);
   return true;
 }

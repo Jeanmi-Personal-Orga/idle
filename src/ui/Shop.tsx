@@ -1,44 +1,51 @@
-import { buyCatalyst, formatNum } from '../game/engine';
-import { hourglassShopCost } from '../game/formulas';
+import { buyWithGold, formatNum } from '../game/engine';
+import { goldOfferCost, GOLD_OFFERS } from '../game/formulas';
 import { resourceDef } from '../game/resources';
 import { store, useGame } from '../game/store';
+import { ResIcon } from './ResIcon';
 
-/** Vue dédiée : le comptoir, pour l'instant seul article en vente. */
+/**
+ * Le comptoir. Les sacs d'or tombent au combat et ne servent qu'ici : acheter de
+ * la matière, du savoir, ou supprimer une attente depuis l'écran concerné.
+ */
 export function ShopView() {
+  const state = useGame();
+
   return (
     <div className="view">
       <div className="card">
         <div className="label">Boutique</div>
-        <div className="muted small">Contre des pièces d'or gagnées au combat.</div>
-      </div>
-      <CatalystShop />
-    </div>
-  );
-}
-
-/** Petit comptoir secondaire : échange des pièces d'or accumulées contre un catalyseur. */
-export function CatalystShop() {
-  const state = useGame();
-  const def = resourceDef('shard');
-  const coin = resourceDef('goldCoin');
-  const cost = hourglassShopCost(state.resources.shard);
-  const affordable = state.resources.goldCoin >= cost;
-
-  return (
-    <div className="card row between">
-      <div>
-        <div className="label">Comptoir aux catalyseurs</div>
         <div className="muted small">
-          {def.icon} {formatNum(state.resources.catalyst)} · {coin.icon}{' '}
-          {formatNum(state.resources.goldCoin)} — échange des pièces d'or contre un catalyseur.
+          <ResIcon id="goldCoin" /> {formatNum(state.resources.goldCoin)} — les sacs d'or tombent au combat.
+          Ils achètent de la matière ici, et du temps depuis le laboratoire ou la recherche.
         </div>
       </div>
-      <button className="ghost" disabled={!affordable} onClick={() => store.act(buyCatalyst)}>
-        Acheter 1 catalyseur
-        <span className="muted small">
-          {formatNum(cost)} {coin.icon}
-        </span>
-      </button>
+
+      {GOLD_OFFERS.map((offer) => {
+        const def = resourceDef(offer.resource);
+        const cost = goldOfferCost(offer, state.resources[offer.resource]);
+        const affordable = state.resources.goldCoin >= cost;
+        return (
+          <div className="card row between" key={offer.resource}>
+            <div>
+              <div className="label">
+                <ResIcon id={offer.resource} size={15} /> {def.name}
+              </div>
+              <div className="muted small">{def.use}</div>
+            </div>
+            <button
+              className="ghost"
+              disabled={!affordable}
+              onClick={() => store.act((st) => buyWithGold(st, offer.resource))}
+            >
+              +{formatNum(offer.amount)}
+              <span className="muted small">
+                {formatNum(cost)} <ResIcon id="goldCoin" size={13} />
+              </span>
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
