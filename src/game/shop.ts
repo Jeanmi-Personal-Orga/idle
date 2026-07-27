@@ -17,4 +17,5 @@ export const GOLD_PACKS: GoldPack[] = [
   { id: 'poignee', gold: 120, bonus: 0, price: '1,99 €' },
   { id: 'bourse', gold: 650, bonus: 50, price: '4,99 €' },
   { id: 'coffre', gold: 1400, bonus: 200, price: '9,99 €' },
+  { id: 'sac', gold: 3000, bonus: 600, price: '19,99 €' },
 ];

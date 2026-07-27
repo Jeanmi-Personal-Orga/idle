@@ -1438,3 +1438,15 @@ nav .icon {
   white-space: nowrap;
   animation: gain-rise 0.9s ease-out forwards;
 }
+
+/* Le choix du personnage à l'inscription : quatre vignettes serrées, pour que le
+   formulaire tienne à l'écran sans défilement. */
+.compact-roster {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.compact-roster .roster-card {
+  padding: 6px 2px;
+  font-size: 11px;
+}

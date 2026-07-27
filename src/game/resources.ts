@@ -47,13 +47,6 @@ export const RESOURCES: ResourceDef[] = [
     use: 'Achète des legs permanents après une dissolution.',
   },
   {
-    id: 'catalyst',
-    name: 'Catalyseurs',
-    icon: '/sprites/ui/catalyst.png',
-    color: 'var(--catalyst)',
-    use: 'Termine sur-le-champ une distillation ou une recherche. Gagné en dégageant une vague de contrat (toutes les 10 vagues).',
-  },
-  {
     id: 'goldCoin',
     name: "Pièces d'or",
     icon: '/sprites/ui/goldCoin.png',

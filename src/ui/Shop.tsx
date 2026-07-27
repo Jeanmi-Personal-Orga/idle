@@ -1,8 +1,5 @@
-import { buyWithGold, formatNum } from '../game/engine';
-import { GOLD_OFFERS, goldOfferCost } from '../game/formulas';
-import { resourceDef } from '../game/resources';
+import { formatNum } from '../game/engine';
 import { GOLD_PACKS } from '../game/shop';
-import { store, useGame } from '../game/store';
 import { ResIcon } from './ResIcon';
 
 /**
@@ -13,19 +10,8 @@ import { ResIcon } from './ResIcon';
  *   longs chantiers depuis l'écran concerné.
  */
 export function ShopView() {
-  const state = useGame();
-
   return (
     <div className="view">
-      <div className="card">
-        <div className="label">Boutique</div>
-        <div className="muted small">
-          <ResIcon id="goldCoin" /> {formatNum(state.resources.goldCoin)} sacs d'or. Ils
-          tombent au combat, s'achètent ici, et suppriment les attentes du laboratoire
-          et de la recherche.
-        </div>
-      </div>
-
       <div className="card">
         <div className="label">Sacs d'or</div>
         <div className="muted small">
@@ -56,35 +42,6 @@ export function ShopView() {
           Paiements non branchés : il faut un prestataire et une vérification des
           reçus côté serveur. Les boutons restent inactifs jusque-là.
         </div>
-      </div>
-
-      <div className="card">
-        <div className="label">Contre des sacs d'or</div>
-        {GOLD_OFFERS.map((offer) => {
-          const def = resourceDef(offer.resource);
-          const cost = goldOfferCost(offer, state.resources[offer.resource]);
-          const affordable = state.resources.goldCoin >= cost;
-          return (
-            <div className="row between" key={offer.resource}>
-              <div>
-                <b>
-                  <ResIcon id={offer.resource} size={14} /> {def.name}
-                </b>
-                <div className="muted small">{def.use}</div>
-              </div>
-              <button
-                className="ghost"
-                disabled={!affordable}
-                onClick={() => store.act((st) => buyWithGold(st, offer.resource))}
-              >
-                +{formatNum(offer.amount)}
-                <span className="muted small">
-                  {formatNum(cost)} <ResIcon id="goldCoin" size={13} />
-                </span>
-              </button>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
