@@ -110,6 +110,13 @@ export interface CombatState {
   enemies: Enemy[];
   /** Vrai pendant la pause qui suit une mort. */
   reviving: number;
+  /**
+   * Secondes restantes avant que les combattants soient au contact. Tant que ce
+   * compte n'est pas écoulé, personne ne frappe : l'affichage et la simulation
+   * racontent la même chose, et plus aucun coup ne part de l'autre bout de
+   * l'arène.
+   */
+  closing: number;
 }
 
 export interface GameState {

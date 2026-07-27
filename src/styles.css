@@ -85,16 +85,7 @@ body {
   width: 100%;
 }
 
-/* La brume : une seule surcouche, 15 % d'opacité, au-dessus de tout (§6). */
-.fog {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  opacity: 0.15;
-  z-index: 50;
-}
+
 
 /* --- Sprites HD (dossier hd/) --- */
 
@@ -1255,4 +1246,32 @@ nav .icon {
 
 .res-catalyst {
   color: var(--catalyst);
+}
+
+/* Pastille de filtre : éteinte par défaut, allumée quand elle filtre. */
+.chip {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: rgba(13, 18, 24, 0.7);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.chip.on {
+  background: #223041;
+  border-color: var(--essence);
+  color: var(--fg);
+}
+
+/* Étoiles de dissolution, à côté du niveau du laboratoire. */
+.stars {
+  color: var(--catalyst);
+  letter-spacing: 1px;
+}
+
+/* Une popup de réserve peut être longue : elle défile, la page non. */
+.stack.scroll {
+  max-height: 46vh;
+  overflow-y: auto;
 }

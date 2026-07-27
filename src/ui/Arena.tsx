@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
 import { WAVES_PER_DISTRICT, cycleOf } from '../game/content';
-import { formatNum } from '../game/engine';
+import { CLOSING_TIME, formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
 import { Sprite } from './Sprite';
@@ -10,14 +10,16 @@ import { Sprite } from './Sprite';
  * L'arène : une seule scène, où la distance se joue vraiment.
  *
  * Déroulé d'une vague :
- * 1. l'ennemi sort de la brume à droite, le héros attend à gauche ;
- * 2. ceux qui se battent au contact **marchent l'un vers l'autre** — à mi-chemin
- *    si les deux avancent, jusqu'à l'autre si un seul avance ;
+ * 1. le héros **tient sa place** au milieu de la scène ; il ne recule jamais et
+ *    n'est jamais replacé d'un coup ;
+ * 2. l'ennemi sort de la brume à droite et **marche jusqu'à lui** — le héros fait
+ *    quelques pas à sa rencontre s'il se bat au contact ;
  * 3. arrivés au contact ils y restent, et échangent les coups jusqu'à la mort.
  *
- * Le combattant à distance ne bouge jamais : c'est l'autre qui vient le
- * chercher. La marche dure le temps de parcourir la distance, à vitesse
- * constante — pas une durée fixe, sinon les longues distances se téléportent.
+ * L'approche est comptée par le **moteur** (`combat.closing`) : tant qu'elle
+ * dure, aucun coup ne part, d'aucun des deux camps. L'affichage et la simulation
+ * racontent donc la même chose, et on ne voit plus un coup porter depuis l'autre
+ * bout de l'arène.
  *
  * Tout ceci est de la mise en scène : la simulation ne connaît que des cadences
  * de frappe, le déplacement les suit sans changer aucun résultat.
@@ -25,11 +27,7 @@ import { Sprite } from './Sprite';
 
 /** Marge laissée entre deux corps au contact. */
 const CONTACT_GAP = 6;
-/**
- * Vitesse de marche, en pixels par seconde. Volontairement lente : on doit voir
- * les deux se rapprocher, pas les voir glisser d'un bloc.
- */
-const WALK_SPEED = 46;
+
 
 export function Arena() {
   const state = useGame();
@@ -54,14 +52,15 @@ export function Arena() {
   const foeRef = useRef<HTMLDivElement>(null);
   const gap = useGap(arenaRef, heroRef, foeRef, [c.district, c.wave, hero, foe]);
 
-  // Qui marche, et jusqu'où. Un combattant à distance reste sur place.
-  const bothMelee = heroStyle === 'melee' && foeStyle === 'melee';
-  const heroTravel = heroStyle === 'melee' ? (bothMelee ? gap / 2 : gap) : 0;
-  const foeTravel = foeStyle === 'melee' ? (bothMelee ? gap / 2 : gap) : 0;
-  const walkMs = Math.max(400, (Math.max(heroTravel, foeTravel) / WALK_SPEED) * 1000);
+  // Le héros tient sa place : il ne fait qu'un quart du chemin, et c'est
+  // l'ennemi qui vient le trouver. Un combattant à distance ne bouge pas.
+  const heroTravel = heroStyle === 'melee' ? gap * 0.25 : 0;
+  const foeTravel = foeStyle === 'melee' ? gap - heroTravel : 0;
+  const walkMs = CLOSING_TIME * 1000;
 
-  // Chaque nouvelle vague renvoie tout le monde à sa place, puis on remarche.
-  const closed = useApproach(`${c.district}-${c.wave}`, dead);
+  // C'est le moteur qui dit si l'on est au contact : l'affichage n'a plus sa
+  // propre minuterie, donc un coup ne peut plus partir avant l'arrivée.
+  const closed = (c.closing ?? 0) <= 0 && !dead;
 
   const heroWalking = !dead && !closed && heroTravel > 0;
   const foeWalking = !dead && !closed && foeTravel > 0;
@@ -76,7 +75,8 @@ export function Arena() {
   const foeHit = usePulse(lastHitOnMain?.id ?? 0, 150);
   const heroHit = usePulse(store.foeSwings, 170) && !dead;
 
-  const heroAt = dead ? 0 : closed ? heroTravel : 0;
+  // Même mort, le héros reste où il est tombé : rien ne se téléporte.
+  const heroAt = closed && !dead ? heroTravel : heroTravel;
   const foeAt = dead ? 0 : closed ? foeTravel : 0;
   const heroX = heroAt + (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
   const foeX = -(foeAt + (foeStrike ? 7 : 0) - (foeHit ? 5 : 0));
@@ -214,24 +214,6 @@ function ExtraFoe({
   );
 }
 
-/**
- * Vrai une fois la distance parcourue. Repart à faux à chaque nouvelle vague :
- * le nouvel ennemi sort de la brume, et il faut de nouveau aller au contact.
- */
-function useApproach(waveKey: string, dead: boolean): boolean {
-  const [closed, setClosed] = useState(false);
-
-  useEffect(() => {
-    setClosed(false);
-    // Court délai : l'ennemi finit d'apparaître avant qu'on lui marche dessus.
-    const t = window.setTimeout(() => setClosed(true), 220);
-    return () => window.clearTimeout(t);
-  }, [waveKey]);
-
-  // À la mort, le héros retombe à sa place de départ.
-  return closed && !dead;
-}
-
 /** Vrai pendant `ms` après chaque incrément du compteur. */
 function usePulse(counter: number, ms: number): boolean {
   const [on, setOn] = useState(false);
@@ -349,7 +331,8 @@ export function FighterBar({
   name: string;
   hp: number;
   max: number;
-  note: string;
+  /** Ligne facultative sous la barre ; omise, rien n'est réservé à l'écran. */
+  note?: string;
 }) {
   const pct = Math.max(0, Math.min(100, (hp / max) * 100));
   return (
@@ -361,7 +344,7 @@ export function FighterBar({
       <div className="muted small">
         {formatNum(Math.max(0, hp))} / {formatNum(max)}
       </div>
-      <div className="muted small">{note}</div>
+      {note ? <div className="muted small">{note}</div> : null}
     </div>
   );
 }

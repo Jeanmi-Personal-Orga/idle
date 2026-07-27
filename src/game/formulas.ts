@@ -94,6 +94,27 @@ export function dps(s: Required<Stats>): number {
   return (s.power * hits * critMult) / attackInterval(s);
 }
 
+/**
+ * Points de vie effectifs : ce que le héros encaisse réellement, vol de vie et
+ * régénération compris. Deux configurations à PV égaux ne tiennent pas le même
+ * temps si l'une se soigne.
+ */
+export function effectiveHp(s: Required<Stats>): number {
+  return s.health * (1 + s.osmosis / 150 + s.condensation / 8);
+}
+
+/**
+ * Puissance : un seul nombre pour comparer deux configurations d'un coup d'œil.
+ *
+ * C'est la moyenne géométrique des dégâts par seconde et des points de vie
+ * effectifs — doubler ses dégâts ou doubler sa survie compte donc pareil, et
+ * négliger l'un des deux se voit tout de suite. Purement indicatif : aucune
+ * règle du jeu ne consulte cette valeur.
+ */
+export function powerScore(s: Required<Stats>): number {
+  return Math.round(Math.sqrt(dps(s) * effectiveHp(s)));
+}
+
 // --- Ennemis ---------------------------------------------------------------
 
 export function enemyName(district: number, wave: number): string {

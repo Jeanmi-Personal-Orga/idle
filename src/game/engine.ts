@@ -25,7 +25,13 @@ import { NEUTRAL_MODS, advanceResearch, insightReward } from './tech';
 import type { CharacterId } from './characters';
 import type { Enemy, GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
+
+/**
+ * Temps de marche jusqu'au contact, en secondes. Vaut pour les deux camps : la
+ * vague ne commence vraiment qu'une fois les combattants face à face.
+ */
+export const CLOSING_TIME = 1.1;
 
 let idCounter = 0;
 const nextId = () => `i${Date.now().toString(36)}${(idCounter++).toString(36)}`;
@@ -94,6 +100,7 @@ export function newGame(): GameState {
       hero: { hp: 100, cooldown: 0 },
       enemies: makeEnemies(0, 1),
       reviving: 0,
+      closing: CLOSING_TIME,
     },
     lastSeen: Date.now(),
     essenceRate: 0,
@@ -165,6 +172,7 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
       c.hero.hp = s.health;
       c.wave = 1;
       c.enemies = makeEnemies(c.district, c.wave, allMods(state).enemyDamageMult);
+      c.closing = CLOSING_TIME;
     }
     return;
   }
@@ -176,6 +184,15 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
   }
 
   c.hero.hp = Math.min(s.health, c.hero.hp + (s.health * s.condensation) / 100 * dt);
+
+  // Marche d'approche : personne ne frappe avant d'être arrivé.
+  if ((c.closing ?? 0) > 0) {
+    c.closing = Math.max(0, (c.closing ?? 0) - dt);
+    if (c.closing > 0) return;
+    // On arrive au contact prêt à frapper, pas avec un temps de recharge entamé.
+    c.hero.cooldown = 0;
+    for (const e of c.enemies) e.cooldown = e.interval;
+  }
 
   // Frappes du héros : toujours sur le premier ennemi encore vivant.
   c.hero.cooldown -= dt;
@@ -266,6 +283,8 @@ function onWaveCleared(state: GameState, rng: () => number) {
   }
   c.enemies = makeEnemies(c.district, c.wave, mods.enemyDamageMult);
   c.hero.cooldown = 0;
+  // La vague suivante commence par la marche, pas par un coup.
+  c.closing = CLOSING_TIME;
 }
 
 /** Crédite une partie des gains accumulés hors-ligne. */

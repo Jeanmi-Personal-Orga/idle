@@ -6,7 +6,6 @@ import { BrumeView } from './ui/BrumeView';
 import { TechView } from './ui/TechView';
 import { AscendView } from './ui/AscendView';
 import { ShopView } from './ui/Shop';
-import { Fog } from './ui/Fog';
 import { CharacterSelect } from './ui/CharacterSelect';
 import { AuthScreen } from './ui/AuthScreen';
 import { hasUnlockedAscension, shardGain } from './game/ascension';
@@ -61,7 +60,6 @@ export default function App() {
             setShowAuth(false);
           }}
         />
-        <Fog />
       </div>
     );
   }
@@ -71,7 +69,6 @@ export default function App() {
     return (
       <div className="app">
         <CharacterSelect />
-        <Fog />
       </div>
     );
   }
@@ -129,8 +126,6 @@ export default function App() {
         ))}
       </nav>
 
-      {/* La brume, au-dessus de tout : le liant visuel du jeu. */}
-      <Fog />
     </div>
   );
 }

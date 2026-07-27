@@ -253,6 +253,11 @@ export function migrate(save: GameState): GameState | null {
     save.stash = [];
     save.version = 9;
   }
+  if (save.version === 9) {
+    // v10 : marche d'approche gérée par le moteur.
+    save.combat.closing = 0;
+    save.version = 10;
+  }
   return save.version === SAVE_VERSION ? save : null;
 }
 

@@ -6,10 +6,10 @@ import {
   SLOTS,
   STATS,
   WAVES_PER_DISTRICT,
-  chapterBlurb,
   districtLabel,
   nextMissionWave,
   purity,
+  SUB_POOL,
 } from "../game/content";
 import {
   collectDistillation,
@@ -26,10 +26,9 @@ import {
   upgradeLab,
 } from "../game/engine";
 import {
-  attackInterval,
   distillCost,
   distillDuration,
-  dps,
+  powerScore,
   heroStats,
   itemScore,
   labUpgradeCost,
@@ -37,11 +36,11 @@ import {
   purityWeights,
   upgradeCost,
 } from "../game/formulas";
-import { mods as allMods } from "../game/modifiers";
+import { mods as allMods, type Mods } from "../game/modifiers";
 import { DEFAULT_CHARACTER } from "../game/characters";
 import { resourceDef } from "../game/resources";
 import { store, useGame } from "../game/store";
-import type { SlotId, StatKey } from "../game/types";
+import type { PurityId, SlotId, StatKey } from "../game/types";
 import { Arena, FighterBar } from "./Arena";
 import { Cauldron } from "./Cauldron";
 import { ItemCard, PurityLegend, SlotIcon } from "./ItemCard";
@@ -74,7 +73,6 @@ export function BrumeView() {
         <div className="row between">
           <div>
             <div className="label">{districtLabel(c.district)}</div>
-            <div className="muted small">{chapterBlurb(c.district)}</div>
             <div className="muted small">
               Vague {c.wave} / {WAVES_PER_DISTRICT}
               {c.wave === WAVES_PER_DISTRICT && " · gardien"}
@@ -90,8 +88,9 @@ export function BrumeView() {
                 ⓘ
               </button>
             </div>
-            <div className="label">{formatNum(dps(s))}</div>
-            <div className="muted small">dégâts / s</div>
+            {/* Une seule mesure lisible, à la place du détail technique. */}
+            <div className="label">{formatNum(powerScore(s))}</div>
+            <div className="muted small">puissance</div>
           </div>
         </div>
 
@@ -104,7 +103,6 @@ export function BrumeView() {
             name="Toi"
             hp={c.hero.hp}
             max={s.health}
-            note={`${attackInterval(s).toFixed(2)} s / frappe`}
           />
           <FighterBar
             side="foe"
@@ -115,7 +113,6 @@ export function BrumeView() {
             }
             hp={c.enemies.reduce((sum, e) => sum + Math.max(0, e.hp), 0)}
             max={c.enemies.reduce((sum, e) => sum + e.maxHp, 0)}
-            note={`${formatNum(c.enemies.reduce((sum, e) => sum + (e.hp > 0 ? e.damage : 0), 0))} par coup (total)`}
           />
         </div>
       </div>
@@ -171,7 +168,16 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
       />
       <div className="row between">
         <div>
-          <div className="label">⚗ Laboratoire · niveau {state.labLevel}</div>
+          <div className="label">
+            ⚗ Laboratoire · niveau {state.labLevel}
+            {state.ascension.count > 0 && (
+              <span className="stars" title={`${state.ascension.count} dissolution(s)`}>
+                {' '}
+                {'✦'.repeat(Math.min(5, state.ascension.count))}
+                {state.ascension.count > 5 && `×${state.ascension.count}`}
+              </span>
+            )}
+          </div>
           <div className="muted small">
             {finished
               ? "Fiole pleine — touche le chaudron pour la ramasser"
@@ -237,6 +243,14 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
                 <b>{formatDuration(labUpgradeDuration(state.labLevel))}</b>
               </div>
             </div>
+
+            {/* Ce que l'amélioration change vraiment : la pureté de ce qui sort
+                du chaudron. Avant / après, pour décider en connaissance. */}
+            <div className="label">Puretés obtenues</div>
+            <PurityOdds labLevel={state.labLevel} mods={mods} />
+            <div className="muted small">Après amélioration</div>
+            <PurityOdds labLevel={state.labLevel + 1} mods={mods} />
+
             <button
               disabled={state.resources.essence < labCost.essence}
               onClick={() => {
@@ -253,6 +267,29 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
   );
 }
 
+/**
+ * Répartition des paliers de pureté à la fabrication, en pourcentage. C'est le
+ * seul vrai effet visible d'une amélioration du laboratoire, donc il est chiffré
+ * plutôt que suggéré.
+ */
+function PurityOdds({ labLevel, mods }: { labLevel: number; mods: Mods }) {
+  const weights = purityWeights(labLevel, mods);
+  const total = weights.reduce((a, b) => a + b, 0);
+  return (
+    <div className="subs">
+      {PURITIES.map((p, i) => {
+        const share = (weights[i] / total) * 100;
+        if (share < 0.5) return null;
+        return (
+          <span key={p.id} className={`pill ${p.frame}`} style={{ ['--purity' as string]: p.color, color: p.color }}>
+            {p.name} {share.toFixed(0)} %
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Équipement, en compact : équipé + réserve, mêmes actions que l'ancien onglet Élixirs. */
 function GearCard({ state }: { state: ReturnType<typeof useGame> }) {
   const mods = allMods(state);
@@ -260,6 +297,7 @@ function GearCard({ state }: { state: ReturnType<typeof useGame> }) {
   // Une icône par emplacement ; cliquer en déplie les stats, sans occuper de
   // place tant qu'on ne regarde pas.
   const [openSlot, setOpenSlot] = useState<SlotId | null>(null);
+  const [showStash, setShowStash] = useState(false);
   const openItem = openSlot ? state.equipped[openSlot] : undefined;
 
   return (
@@ -311,32 +349,147 @@ function GearCard({ state }: { state: ReturnType<typeof useGame> }) {
         </div>
       )}
 
-      <div className="row between">
-        <div className="label">Réserve · {stash.length}</div>
-        {stash.length > 0 && (
-          <button className="ghost" onClick={() => store.act(dissolveAll)}>
-            Tout dissoudre
+      {/* La réserve ne prend plus qu'une ligne : le détail vit dans sa popup,
+          avec ses filtres — une liste de trente pièces n'a rien à faire ici. */}
+      <button className="ghost row between" onClick={() => setShowStash(true)}>
+        <span className="label">Réserve · {stash.length}</span>
+        <span className="muted small">{stash.length ? 'Voir et filtrer' : 'Vide'}</span>
+      </button>
+
+      {showStash && <StashPopup onClose={() => setShowStash(false)} />}
+    </div>
+  );
+}
+
+/**
+ * La réserve, en grand : filtres par emplacement, par palier et par statistique
+ * secondaire. Les filtres se combinent, et un compteur dit toujours combien de
+ * pièces répondent.
+ */
+function StashPopup({ onClose }: { onClose: () => void }) {
+  const state = useGame();
+  const mods = allMods(state);
+  const [slot, setSlot] = useState<SlotId | null>(null);
+  const [tier, setTier] = useState<PurityId | null>(null);
+  const [sub, setSub] = useState<StatKey | null>(null);
+
+  const shown = state.stash
+    .filter((i) => !slot || i.slot === slot)
+    .filter((i) => !tier || i.purity === tier)
+    // Une pièce passe si l'une de ses deux secondaires correspond : filtrer sur
+    // les deux à la fois ne laisserait presque rien.
+    .filter((i) => !sub || i.subs.some((x) => x.key === sub))
+    .sort((a, b) => itemScore(b) - itemScore(a));
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="card modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="row between">
+          <div className="label">
+            Réserve · {shown.length} / {state.stash.length}
+          </div>
+          <button className="ghost" onClick={onClose}>
+            ✕
           </button>
-        )}
-      </div>
-      {stash.length === 0 && <div className="muted small">Rien en attente.</div>}
-      <div className="stack">
-        {stash.map((item) => (
-          <ItemCard
-            key={item.id}
-            item={item}
-            actions={
-              <>
-                <button onClick={() => store.act((st) => equip(st, item.id))}>Porter</button>
-                <button className="ghost" onClick={() => store.act((st) => dissolve(st, item.id))}>
-                  Dissoudre
-                </button>
-              </>
-            }
-          />
-        ))}
+        </div>
+
+        <div className="muted small">Emplacement</div>
+        <div className="subs">
+          <FilterChip on={!slot} onClick={() => setSlot(null)} label="Tous" />
+          {SLOTS.map((sl) => (
+            <FilterChip
+              key={sl.id}
+              on={slot === sl.id}
+              onClick={() => setSlot(slot === sl.id ? null : sl.id)}
+              label={sl.name}
+            />
+          ))}
+        </div>
+
+        <div className="muted small">Palier</div>
+        <div className="subs">
+          <FilterChip on={!tier} onClick={() => setTier(null)} label="Tous" />
+          {PURITIES.map((p) => (
+            <FilterChip
+              key={p.id}
+              on={tier === p.id}
+              onClick={() => setTier(tier === p.id ? null : p.id)}
+              label={p.name}
+              color={p.color}
+            />
+          ))}
+        </div>
+
+        <div className="muted small">Statistique secondaire</div>
+        <div className="subs">
+          <FilterChip on={!sub} onClick={() => setSub(null)} label="Toutes" />
+          {SUB_POOL.map((k) => (
+            <FilterChip
+              key={k}
+              on={sub === k}
+              onClick={() => setSub(sub === k ? null : k)}
+              label={STATS[k].name}
+            />
+          ))}
+        </div>
+
+        <div className="row between">
+          {state.stash.length > 0 && (
+            <button className="ghost" onClick={() => store.act(dissolveAll)}>
+              Tout dissoudre
+            </button>
+          )}
+        </div>
+
+        <div className="stack scroll">
+          {shown.length === 0 && <div className="muted small">Aucune pièce ne correspond.</div>}
+          {shown.map((item) => (
+            <ItemCard
+              key={item.id}
+              item={item}
+              actions={
+                <>
+                  <button onClick={() => store.act((st) => equip(st, item.id))}>Porter</button>
+                  <button
+                    disabled={state.resources.essence < upgradeCost(item, mods)}
+                    onClick={() => store.act((st) => upgrade(st, item.id))}
+                  >
+                    Améliorer{' '}
+                    <span className="muted small">{formatNum(upgradeCost(item, mods))} ess</span>
+                  </button>
+                  <button className="ghost" onClick={() => store.act((st) => dissolve(st, item.id))}>
+                    Dissoudre
+                  </button>
+                </>
+              }
+            />
+          ))}
+        </div>
       </div>
     </div>
+  );
+}
+
+/** Pastille de filtre : allumée quand elle est active. */
+function FilterChip({
+  on,
+  onClick,
+  label,
+  color,
+}: {
+  on: boolean;
+  onClick: () => void;
+  label: string;
+  color?: string;
+}) {
+  return (
+    <button
+      className={`chip ${on ? 'on' : ''}`}
+      onClick={onClick}
+      style={color && on ? { borderColor: color, color } : undefined}
+    >
+      {label}
+    </button>
   );
 }
 
