@@ -63,6 +63,20 @@ export const PURITIES: {
     color: "#f2eee2",
     frame: "f-absolu",
   },
+  {
+    id: "demoniaque",
+    name: "Démoniaque",
+    mult: 240,
+    color: "#e0455c",
+    frame: "f-demoniaque",
+  },
+  {
+    id: "divin",
+    name: "Divin",
+    mult: 620,
+    color: "#ffd873",
+    frame: "f-divin",
+  },
 ];
 
 export const purityIndex = (id: PurityId) =>

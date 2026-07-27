@@ -1042,6 +1042,73 @@ main {
   opacity: 0.7;
 }
 
+/*
+ * Démoniaque : cadre épais, braises qui respirent. Le rouge seul ne suffit pas —
+ * il faut que le cadre lui-même dise « ceci n'est pas un palier ordinaire ».
+ */
+@keyframes ember-breathe {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 4px rgba(10, 14, 20, 0.9),
+      inset 0 0 0 5px color-mix(in srgb, var(--purity) 45%, transparent),
+      0 0 10px -2px color-mix(in srgb, var(--purity) 55%, transparent);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 4px rgba(10, 14, 20, 0.9),
+      inset 0 0 0 5px color-mix(in srgb, var(--purity) 70%, transparent),
+      0 0 22px 2px color-mix(in srgb, var(--purity) 65%, transparent);
+  }
+}
+
+.f-demoniaque {
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--purity) 85%, transparent);
+  border-radius: 3px;
+  animation: ember-breathe 2.8s ease-in-out infinite;
+}
+
+/*
+ * Divin : le dernier palier. Cadre doublé, et une lumière qui balaie l'objet —
+ * la seule pièce du jeu qui éclaire son propre cadre.
+ */
+@keyframes divine-sweep {
+  0% {
+    transform: translateX(-140%) rotate(8deg);
+  }
+  100% {
+    transform: translateX(240%) rotate(8deg);
+  }
+}
+
+.f-divin {
+  position: relative;
+  overflow: hidden;
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--purity) 90%, transparent);
+  box-shadow:
+    inset 0 0 0 4px rgba(10, 14, 20, 0.9),
+    inset 0 0 0 6px color-mix(in srgb, var(--purity) 60%, transparent),
+    0 0 26px -4px color-mix(in srgb, var(--purity) 70%, transparent);
+}
+
+.card.f-divin::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  width: 28%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    color-mix(in srgb, var(--purity) 40%, transparent),
+    transparent
+  );
+  animation: divine-sweep 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
 /* Cadre épais, et la brume s'écarte autour de l'objet. */
 .f-absolu {
   border-width: 2px;

@@ -22,7 +22,9 @@ export type PurityId =
   | 'prismatique'
   | 'ethere'
   | 'quintessence'
-  | 'absolu';
+  | 'absolu'
+  | 'demoniaque'
+  | 'divin';
 
 /**
  * Huit emplacements. Quatre donnent des dégâts, quatre donnent des points de
