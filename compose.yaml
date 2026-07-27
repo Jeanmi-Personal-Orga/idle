@@ -15,15 +15,17 @@ services:
   # docker compose --profile dev up dev
   # Écoute sur 0.0.0.0 : l'URL est aussi ouvrable depuis un téléphone du même réseau.
   dev:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    build:
+      context: .
+      dockerfile: docker/dev.Dockerfile
+    image: alchimiste-de-brume-dev
     ports:
       - '5173:5173'
     volumes:
       - .:/app
-      # node_modules reste dans le conteneur : les binaires natifs de l'hôte ne
-      # sont pas forcément compatibles avec Alpine.
+      # node_modules vient de l'image, pas de l'hôte : les binaires natifs
+      # compilés pour la machine ne sont pas compatibles avec Alpine. Docker
+      # remplit ce volume nommé depuis l'image à sa première utilisation.
       - devmodules:/app/node_modules
     profiles: ['dev']
 

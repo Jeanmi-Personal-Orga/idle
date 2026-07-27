@@ -131,6 +131,11 @@ il n'y a aucun serveur applicatif à faire tourner. L'image Android fait ~4 Go
 (JDK 21 + SDK Android 36) et sa première construction prend une dizaine de
 minutes ; elle sort un APK debug signé de 4,2 Mo, vérifié.
 
+Le conteneur `dev` installe ses dépendances à la construction de l'image, pas au
+démarrage : un `npm install` rejoué à chaque `up` par-dessus un volume monté est
+lent et finit par casser. Après un changement de `package.json`, reconstruis-le
+avec `docker compose --profile dev up --build dev`.
+
 Le conteneur `dev` et un `npm run dev` lancé sur la machine se disputent le port
 5173 : `failed to bind host port [::]:5173/tcp: address already in use`. Coupe
 l'un des deux (`pkill -f vite`), ou change le port hôte dans `compose.yaml`
