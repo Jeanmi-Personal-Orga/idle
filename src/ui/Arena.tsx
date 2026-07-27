@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { WAVES_PER_DISTRICT, cycleOf, enemySprite, purity } from '../game/content';
+import { BACKGROUND_LAYERS } from '../game/sprites';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
 import { formatNum } from '../game/engine';
 import { attackInterval, heroStats } from '../game/formulas';
@@ -20,8 +21,6 @@ import { Sprite } from './Sprite';
  * change aucun résultat — l'équilibrage validé sur 72 h reste intact.
  */
 
-/** Échelle commune, appliquée à la taille native de chaque sprite. */
-const ARENA_ZOOM = 0.62;
 /** Marge laissée entre deux corps qui se touchent. */
 const CONTACT_GAP = 10;
 
@@ -37,6 +36,8 @@ export function Arena() {
   // « Écho de soi » du Puits Prismatique : l'ennemi est le sprite du joueur.
   const foe = sprite === 'self' ? hero : sprite;
 
+  // Le gardien de fin de district domine physiquement la piétaille.
+  const guardian = c.wave === WAVES_PER_DISTRICT;
   const heroStyle = spriteStyle(hero);
   const foeStyle = spriteStyle(foe);
   const dead = c.reviving > 0;
@@ -66,8 +67,19 @@ export function Arena() {
 
   return (
     <div className="arena" ref={arenaRef}>
-      <div className="layer far" aria-hidden="true" />
-      <div className="layer near" aria-hidden="true" />
+      {/* Décor en cinq couches, de la plus lointaine à la plus proche. */}
+      {BACKGROUND_LAYERS.map((src, i) => (
+        <div
+          key={src}
+          className="bg-layer"
+          aria-hidden="true"
+          style={{
+            backgroundImage: `url(${src})`,
+            // Les couches proches défilent un peu plus que les lointaines.
+            transform: `translateX(${(i - 2) * 4}px) scale(${1 + i * 0.02})`,
+          }}
+        />
+      ))}
 
       <div className="fighter-slot hero" ref={heroRef}>
         <div className="mover" style={{ transform: `translateX(${heroShift}px)` }}>
@@ -75,9 +87,6 @@ export function Arena() {
             character={hero}
             anim={heroAnim(heroPhase, dead, c.reviving, heroHurt, heroStyle, store.heroSwings)}
             fallbackAnim={heroFallback(heroPhase, heroStyle)}
-            fps={heroPhase === 'strike' ? 12 : 7}
-            loop={!dead}
-            zoom={ARENA_ZOOM}
           />
         </div>
       </div>
@@ -88,10 +97,11 @@ export function Arena() {
             character={foe}
             anim={foePhase === 'strike' ? 'attack' : foeHurt ? 'hurt' : 'idle'}
             fallbackAnim={['idle']}
-            fps={foePhase === 'strike' ? 11 : 5}
-            zoom={ARENA_ZOOM}
+            scale={guardian ? 1.3 : 1}
             flip
-            className={`foe enter ${cycleOf(c.district) > 0 ? 'cycled' : ''}`}
+            className={`foe enter ${cycleOf(c.district) > 0 ? 'cycled' : ''} ${
+              foeStyle === 'ranged' ? 'flyer' : ''
+            }`}
             style={{ filter: districtTint(c.district) }}
             key={`${c.district}-${c.wave}`}
           />

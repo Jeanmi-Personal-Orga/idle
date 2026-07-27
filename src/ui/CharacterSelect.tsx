@@ -30,7 +30,7 @@ export function CharacterSelect() {
             onClick={() => setPicked(c.id)}
             aria-pressed={picked === c.id}
           >
-            <Sprite character={c.id} anim="idle" fps={6} zoom={0.72} />
+            <Sprite character={c.id} anim="idle" scale={1.15} />
             <b>{c.name}</b>
           </button>
         ))}
@@ -41,12 +41,10 @@ export function CharacterSelect() {
         <div className="muted small">
           {CHARACTERS.find((c) => c.id === picked)!.blurb}
         </div>
-        <div className="small">
-          {CHARACTERS.find((c) => c.id === picked)!.styleLabel}
-        </div>
         <div className="muted small">
-          Seules l'allure et la façon d'attaquer changent : les dégâts, les points
-          de vie et la vitesse sont identiques pour tous.
+          Seule l'allure change : les dégâts, les points de vie et la vitesse sont
+          identiques pour tous. Les quatre se battent au contact — ils traversent
+          l'arène pour frapper, et vont chercher ce qui vole.
         </div>
         <button
           className="ascend"

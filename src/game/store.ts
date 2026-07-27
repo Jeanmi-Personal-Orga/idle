@@ -7,7 +7,7 @@ import {
   step,
   type CombatEvent,
 } from './engine';
-import { DEFAULT_CHARACTER } from './characters';
+import { CHARACTERS, DEFAULT_CHARACTER } from './characters';
 import type { GameState } from './types';
 
 const KEY = 'brume.save.v1';
@@ -168,10 +168,15 @@ function migrate(save: GameState): GameState | null {
     save.version = 3;
   }
   if (save.version === 3) {
-    // v4 : choix du personnage. Une partie déjà commencée garde l'alchimiste
-    // plutôt que de se voir imposer un sélecteur au milieu de l'aventure.
+    // v4 : choix du personnage.
     save.character = DEFAULT_CHARACTER;
     save.version = 4;
+  }
+  if (save.version === 4) {
+    // v5 : nouveau casting. Les anciens personnages n'existent plus, donc on
+    // redemande le choix plutôt que d'en imposer un au hasard.
+    if (!CHARACTERS.some((c) => c.id === save.character)) save.character = null;
+    save.version = 5;
   }
   return save.version === SAVE_VERSION ? save : null;
 }

@@ -74,24 +74,31 @@ prestige plafonnerait à la fin du contenu et n'aurait plus rien à mordre.
 | Encoches d'affinage sur le cadre, une par 5 niveaux | ✅ |
 | Recherche gravée sur papier huilé, nœuds acquis en ambre | ✅ |
 | Dissolution : écran sombre, éclats qui montent, **mur des six legs** | ✅ `src/ui/LegacyWall.tsx` |
-| Sprites illustrés en spritesheets, héros et ennemis animés | ✅ dossier `hd/` |
-| Icônes d'équipement et chaudron en sprites | ⬜ disponibles dans `hd/`, pas encore branchés |
+| Sprites pixel art : quatre personnages animés, slimes, bestioles, gardiens | ✅ |
+| Décor : cinq couches de forêt dans l'arène | ✅ |
+| Icônes d'équipement en sprites (planches `Equiptment`, `Potions`, `Jars`, `Gems`) | ⬜ pas encore branchées |
 
 ### Sprites
 
-Les personnages viennent du dossier `hd/` (spritesheets illustrées, un fichier
-par animation, décrites par `hd/manifest.json`). Les images servies sont copiées
-dans `public/sprites/` ; `src/ui/Sprite.tsx` les rend, `src/game/sprites.ts`
-lit le manifeste.
+Les visuels viennent des planches déposées dans `assets/` (dossier non versionné,
+voir la note de licence plus bas). Le jeu ne sert que le sous-ensemble utile,
+copié dans `public/sprites/` — 172 Ko en tout :
 
-L'échelle passe par un `zoom` appliqué à la taille **native** du sprite, jamais
-par une hauteur imposée : sans ça, le rat de cale (112 × 64) s'affiche à la
-taille d'un homme.
+| | |
+| --- | --- |
+| `chars/` | quatre planches 32 × 32, 10 × 7 cases : idle, marche, course, deux attaques, dégât, mort |
+| `foes/slimes.png` | dix slimes, deux poses chacun — debout et écrasé, soit un rebond |
+| `foes/critters.png` | rat, grenouille, araignée, abeille, ver… la piétaille |
+| `bg/forest-1..5.png` | cinq couches de forêt sombre, superposées dans l'arène |
 
-Il n'existe que quatre jeux d'ennemis pour six districts : chaque district
-associe ses ennemis nommés à un sprite (`DISTRICTS[].sprites`) et les reteinte,
-plutôt que d'exiger 24 jeux. Le Puits Prismatique utilise `self` — l'« Écho de
-soi » est le sprite du joueur, comme le demande le document.
+`src/game/sprites.ts` décrit chaque animation par **la liste explicite des cases
+qu'elle traverse**, parce que les deux formats ne se rangent pas pareil : une
+animation de personnage est une ligne continue, alors que les deux poses d'un
+slime sont à deux lignes d'écart.
+
+L'échelle vient de la famille, pas d'une hauteur imposée : un personnage 32 px
+s'affiche à 96, une icône 96 px à 64. Sans ça, un rat ferait la taille d'un
+chevalier. Les gardiens de fin de district sont agrandis de 30 %.
 
 Le miroir de l'ennemi est appliqué **au dessin**, pas à la boîte : la boîte porte
 l'animation d'entrée, et une animation de `transform` écraserait un miroir posé
@@ -124,11 +131,15 @@ quand un coup porte, `death` puis `revive` pendant la réanimation.
 ### Choix du personnage
 
 Au premier lancement, le joueur choisit parmi quatre habitants de la ville noyée
-(`src/game/characters.ts`). Aucune statistique ne change : l'équilibrage a été
-simulé sur 72 h, et des bonus par personnage rendraient irrattrapable une
-décision prise à la première minute, sans information. Seule la **portée**
-diffère — l'alchimiste jette ses fioles à distance, les trois autres vont au
-contact — ce qui se voit à l'écran sans peser sur les chiffres. Les sauvegardes
+(`src/game/characters.ts`) : Le Vétéran, La Barbare, Le Chevalier, La Sentinelle.
+Aucune statistique ne change — l'équilibrage a été simulé sur 72 h, et des bonus
+par personnage rendraient irrattrapable une décision prise à la première minute,
+sans information.
+
+Les quatre se battent au contact. Ce sont les **ennemis volants** (araignée,
+abeille) qui tiennent leurs distances : le joueur doit alors traverser l'arène
+pour aller les chercher, ce qui fait exister la portée sans déséquilibrer le
+choix de départ. Les sauvegardes
 antérieures gardent l'alchimiste sans revoir l'écran.
 
 ## Systèmes en place
@@ -149,6 +160,19 @@ antérieures gardent l'alchimiste sans revoir l'écran.
 
 Les plafonds voulus sont respectés : Réaction en chaîne et Clairvoyance ne servent à
 rien au-delà de 100 %, comme dans le modèle d'origine.
+
+### Licence des assets
+
+Les planches viennent de packs tiers déposés par le joueur dans `assets/`, non
+versionné. Ce qui est versionné, c'est le sous-ensemble servi par le jeu, dans
+`public/sprites/`. Deux points à trancher avant toute diffusion :
+
+- `slimes.png` et `critters.png` viennent de **Cauldron's Brew** (Plopstudio),
+  dont la licence autorise l'usage **non commercial** mais interdit la
+  redistribution. Un dépôt public ou une version commerciale demandent de les
+  remplacer.
+- Les planches de personnages et le décor de forêt sont arrivés **sans fichier
+  de licence**. À vérifier auprès de leur auteur.
 
 ## Développement
 

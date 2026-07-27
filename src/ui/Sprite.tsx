@@ -1,39 +1,29 @@
 import { useEffect, useState } from 'react';
-import { animData } from '../game/sprites';
+import { animData, spriteHeight } from '../game/sprites';
 
 /**
- * Rendu des spritesheets HD du dossier `hd/` (voir son README) : une image par
- * animation, les frames côte à côte. Le manifeste donne le nombre de frames et
- * la taille native.
+ * Rendu d'un sprite : une case de planche, affichée dans une boîte à l'échelle.
  *
- * L'échelle se règle par `zoom`, un multiplicateur de la taille **native** : un
- * rat de cale (112 × 64) reste donc un rat à côté d'un contremaître
- * (160 × 208). Imposer une hauteur commune ferait des rats géants.
- *
- * Les images vivent dans `public/sprites/`, servies telles quelles.
+ * L'échelle vient de la taille visée pour la famille (`spriteHeight`) : les
+ * personnages sont des cases de 32 px, les slimes et bestioles des icônes de
+ * 96 px. Les mettre à la même échelle brute donnerait des rats géants.
  */
-
-const BASE = '/sprites/';
 
 export function Sprite({
   character,
   anim = 'idle',
   fallbackAnim,
-  fps = 8,
-  loop = true,
-  zoom = 1,
+  scale = 1,
   flip = false,
   className = '',
   style,
 }: {
   character: string;
   anim?: string;
-  /** Animations de repli si `anim` n'existe pas pour ce personnage. */
+  /** Animations de repli si `anim` n'existe pas pour cette créature. */
   fallbackAnim?: string[];
-  fps?: number;
-  loop?: boolean;
-  /** Multiplicateur de la taille native du sprite. */
-  zoom?: number;
+  /** Multiplicateur de la hauteur de référence de la famille. */
+  scale?: number;
   flip?: boolean;
   className?: string;
   style?: React.CSSProperties;
@@ -42,17 +32,17 @@ export function Sprite({
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
-    if (!data || data.frames <= 1) return;
+    if (!data || data.cells.length <= 1) return;
     setFrame(0);
     let id = 0;
     const tick = () =>
       setFrame((p) => {
         const n = p + 1;
-        if (n >= data.frames) return loop ? 0 : p;
+        if (n >= data.cells.length) return data.loop ? 0 : p;
         return n;
       });
     const start = () => {
-      if (!id) id = window.setInterval(tick, 1000 / fps);
+      if (!id) id = window.setInterval(tick, 1000 / data.fps);
     };
     const stop = () => {
       window.clearInterval(id);
@@ -67,13 +57,17 @@ export function Sprite({
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [data, fps, loop]);
+  }, [data]);
 
   if (!data) return null;
-  const width = data.frameWidth * zoom;
-  const height = data.frameHeight * zoom;
+
+  const [cw, ch] = data.cell;
+  const zoom = (spriteHeight(character) / ch) * scale;
+  const [col, line] = data.cells[Math.min(frame, data.cells.length - 1)];
+  const width = cw * zoom;
+  const height = ch * zoom;
   // Le miroir est appliqué au dessin, pas à la boîte : la boîte porte les
-  // animations CSS (entrée dans la brume), et une animation de `transform`
+  // animations CSS (entrée en scène), et une animation de `transform`
   // écraserait un miroir posé au même endroit.
   const transform = flip
     ? `translateX(${width}px) scale(${-zoom}, ${zoom})`
@@ -84,10 +78,10 @@ export function Sprite({
       <div
         className="sprite"
         style={{
-          width: data.frameWidth,
-          height: data.frameHeight,
-          backgroundImage: `url(${BASE}${data.file})`,
-          backgroundPosition: `-${frame * data.frameWidth}px 0`,
+          width: cw,
+          height: ch,
+          backgroundImage: `url(${data.sheet})`,
+          backgroundPosition: `-${col * cw}px -${line * ch}px`,
           transform,
         }}
       />

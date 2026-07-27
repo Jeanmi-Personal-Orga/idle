@@ -123,11 +123,11 @@ export const slotDef = (id: SlotId) => SLOTS.find((s) => s.id === id)!;
 /**
  * Districts de la ville noyée. Chaque district multiplie la difficulté et les gains.
  *
- * `sprites` associe un sprite HD à chaque ennemi nommé : les deux archétypes de
- * vague, puis le gardien. Il n'existe que quatre jeux de sprites, donc ils sont
- * réemployés d'un district à l'autre — la teinte du district les distingue.
- * `self` est un cas à part : c'est le reflet du joueur, tel que le demande la
- * direction artistique pour Le Puits Prismatique.
+ * `sprites` associe un sprite à chaque ennemi nommé : les deux archétypes de
+ * vague, puis le gardien. Les gardiens sont des humanoïdes — les mêmes planches
+ * que les personnages jouables —, la piétaille est faite de slimes et de
+ * bestioles. `self` est un cas à part : le reflet du joueur, tel que le demande
+ * la direction artistique pour Le Puits Prismatique.
  */
 export const DISTRICTS: {
   name: string;
@@ -137,32 +137,32 @@ export const DISTRICTS: {
   {
     name: 'Les Quais Bas',
     enemies: ['Rôdeur de vase', 'Noyé pâle', 'Nuée de brume'],
-    sprites: ['rat-de-cale', 'docker-noye', 'contremaitre'],
+    sprites: ['rat', 'slime-vert', 'knight-a'],
   },
   {
     name: 'Le Marché Noyé',
     enemies: ['Marchand creux', 'Verrier fêlé', 'Chien de saumure'],
-    sprites: ['docker-noye', 'ferrailleur', 'contremaitre'],
+    sprites: ['grenouille', 'slime-bleu', 'knight-b'],
   },
   {
     name: 'La Verrerie',
-    enemies: ['Souffleur brisé', 'Automate de plomb', 'Four hurlant'],
-    sprites: ['ferrailleur', 'docker-noye', 'contremaitre'],
+    enemies: ['Souffleur brisé', 'Éclat animé', 'Four hurlant'],
+    sprites: ['araignee', 'slime-blanc', 'barbarian'],
   },
   {
     name: 'Les Citernes',
     enemies: ['Filtreur aveugle', 'Anguille de mercure', 'Gardien calcifié'],
-    sprites: ['docker-noye', 'rat-de-cale', 'contremaitre'],
+    sprites: ['ver', 'slime-gris', 'fighter'],
   },
   {
     name: "L'Observatoire",
     enemies: ['Astronome dissous', 'Prisme errant', 'Œil de brume'],
-    sprites: ['ferrailleur', 'rat-de-cale', 'contremaitre'],
+    sprites: ['abeille', 'slime-violet', 'knight-a'],
   },
   {
     name: 'Le Puits Prismatique',
     enemies: ['Écho de soi', 'Condensat', 'Le Distillateur'],
-    sprites: ['self', 'docker-noye', 'contremaitre'],
+    sprites: ['self', 'slime-rose', 'barbarian'],
   },
 ];
 

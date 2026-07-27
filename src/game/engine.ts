@@ -23,7 +23,7 @@ import { insightReward } from './tech';
 import type { CharacterId } from './characters';
 import type { GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 let idCounter = 0;
 const nextId = () => `i${Date.now().toString(36)}${(idCounter++).toString(36)}`;

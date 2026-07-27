@@ -89,9 +89,8 @@ body {
   background-repeat: no-repeat;
   transform-origin: top left;
   will-change: background-position;
-  /* Les sprites HD sont supersamplés ×4 : les lisser est voulu, les pixeliser
-     les crénellerait (hd/README.md). */
-  image-rendering: auto;
+  /* Pixel art : l'agrandissement doit rester net, sans lissage. */
+  image-rendering: pixelated;
 }
 
 /* --- Choix du personnage --- */
@@ -274,36 +273,43 @@ main {
 /* Une seule scène partagée : les combattants s'y déplacent. */
 .arena {
   position: relative;
-  height: 150px;
+  height: 168px;
   overflow: hidden;
+  border-radius: 10px;
+  background: #10131b;
 }
 
-/* Trois couches : fond noyé, brume, sol au premier plan. */
-.layer {
+/* Décor : cinq couches de forêt superposées, la plus proche par-dessus. */
+.bg-layer {
   position: absolute;
-  inset: auto 0 18px 0;
-  height: 66px;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+  image-rendering: pixelated;
   pointer-events: none;
-}
-
-.layer.far {
-  background:
-    linear-gradient(to top, transparent, rgba(84, 93, 114, 0.16)),
-    repeating-linear-gradient(90deg, transparent 0 26px, rgba(26, 29, 38, 0.55) 26px 44px);
-  opacity: 0.5;
-}
-
-.layer.near {
-  inset: auto 0 0 0;
-  height: 18px;
-  background: linear-gradient(to top, var(--stone-1), transparent);
 }
 
 /* Position de départ de chacun, pieds posés sur le sol. */
 .fighter-slot {
   position: absolute;
-  bottom: 10px;
+  bottom: 12px;
   z-index: 1;
+}
+
+/* Les bestioles volantes ne posent pas les pieds au sol. */
+.fighter-slot .flyer {
+  animation: hover 2.6s ease-in-out infinite;
+}
+
+@keyframes hover {
+  0%,
+  100% {
+    transform: translateY(-14px);
+  }
+  50% {
+    transform: translateY(-22px);
+  }
 }
 
 .fighter-slot.hero {
