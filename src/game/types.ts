@@ -1,5 +1,7 @@
 /** Types du domaine — L'Alchimiste de Brume. */
 
+import type { CharacterId } from './characters';
+
 /** Identifiants des statistiques. Les valeurs sont des pourcentages sauf power/health. */
 export type StatKey =
   | 'power' // Puissance : dégâts par frappe
@@ -88,6 +90,8 @@ export interface CombatState {
 
 export interface GameState {
   version: number;
+  /** Personnage choisi au début de l'aventure ; null tant qu'il ne l'est pas. */
+  character: CharacterId | null;
   resources: Resources;
   labLevel: number;
   /** Niveau atteint par nœud de l'arbre de recherche (voir tech.ts). */

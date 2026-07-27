@@ -7,6 +7,7 @@ import { LabView } from './ui/LabView';
 import { TechView } from './ui/TechView';
 import { AscendView } from './ui/AscendView';
 import { Fog } from './ui/Fog';
+import { CharacterSelect } from './ui/CharacterSelect';
 import { hasUnlockedAscension, shardGain } from './game/ascension';
 
 type Tab = 'brume' | 'lab' | 'gear' | 'tech' | 'ascend';
@@ -30,6 +31,16 @@ export default function App() {
   const state = useGame();
   const [tab, setTab] = useState<Tab>(initialTab);
   const stashCount = state.stash.length;
+
+  // Première chose que voit un nouveau joueur : qui il incarne.
+  if (!state.character) {
+    return (
+      <div className="app">
+        <CharacterSelect />
+        <Fog />
+      </div>
+    );
+  }
 
   return (
     <div className="app">

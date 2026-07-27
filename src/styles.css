@@ -49,7 +49,11 @@ body {
     radial-gradient(120% 60% at 50% 0%, var(--fog-1) 0%, transparent 65%),
     var(--stone-1);
   color: var(--fg);
-  font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font:
+    15px/1.45 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
   overscroll-behavior: none;
 }
 
@@ -71,6 +75,74 @@ body {
   pointer-events: none;
   opacity: 0.15;
   z-index: 50;
+}
+
+/* --- Sprites HD (dossier hd/) --- */
+
+.sprite-box {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.sprite {
+  background-repeat: no-repeat;
+  transform-origin: top left;
+  will-change: background-position;
+  /* Les sprites HD sont supersamplés ×4 : les lisser est voulu, les pixeliser
+     les crénellerait (hd/README.md). */
+  image-rendering: auto;
+}
+
+/* --- Choix du personnage --- */
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 14px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.intro-head h1 {
+  font-size: 21px;
+  margin: 0 0 6px;
+  letter-spacing: 0.02em;
+}
+
+.intro-head p {
+  margin: 0;
+  font-size: 13px;
+  max-width: 42ch;
+}
+
+.roster {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.roster-card {
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 6px;
+  background: linear-gradient(180deg, var(--fog-1), var(--stone-1));
+  border-color: var(--line);
+  font-size: 13px;
+}
+
+.roster-card.picked {
+  border-color: var(--essence);
+  box-shadow: 0 0 16px rgba(79, 214, 160, 0.16);
+}
+
+.roster-card b {
+  font-weight: 600;
+}
+
+.intro-detail {
+  gap: 8px;
 }
 
 /* --- Chrome --- */
@@ -185,7 +257,12 @@ main {
 .card.scene {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(180deg, var(--fog-1) 0%, var(--stone-2) 70%, var(--stone-1) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--fog-1) 0%,
+    var(--stone-2) 70%,
+    var(--stone-1) 100%
+  );
   transition: filter 0.6s ease;
 }
 
@@ -215,7 +292,11 @@ main {
 .layer.far {
   background:
     linear-gradient(to top, transparent, rgba(84, 93, 114, 0.16)),
-    repeating-linear-gradient(90deg, transparent 0 26px, rgba(26, 29, 38, 0.55) 26px 44px);
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 26px,
+      rgba(26, 29, 38, 0.55) 26px 44px
+    );
   opacity: 0.5;
 }
 
@@ -240,14 +321,6 @@ main {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-}
-
-.sprite {
-  width: 74px;
-  height: 74px;
-  overflow: visible;
-  /* Les futurs atlas PNG seront rendus en échelle entière, sans flou (§7). */
-  image-rendering: pixelated;
 }
 
 .fighter-name {
@@ -396,14 +469,8 @@ main {
 
 /* Cycles supérieurs : même silhouette, teinte poussée au violet + contour (§3). */
 .foe.cycled {
-  filter: hue-rotate(-40deg) saturate(1.5) drop-shadow(0 0 6px rgba(155, 127, 224, 0.75));
-}
-
-/* Le gardien est plus grand : par la taille, pas par un transform que
-   l'animation d'entrée écraserait. */
-.sprite.guardian {
-  width: 90px;
-  height: 90px;
+  filter: hue-rotate(-40deg) saturate(1.5)
+    drop-shadow(0 0 6px rgba(155, 127, 224, 0.75));
 }
 
 /* --- Chiffres de dégâts (§3) --- */
@@ -639,7 +706,7 @@ main {
 }
 
 .card.f-prismatique::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   bottom: 0;
@@ -698,7 +765,7 @@ main {
 }
 
 .card.f-quintessence::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background-image: radial-gradient(
@@ -739,8 +806,16 @@ main {
 .tech-paper {
   background:
     linear-gradient(180deg, rgba(107, 75, 52, 0.16), rgba(38, 43, 54, 0.5)),
-    repeating-linear-gradient(0deg, transparent 0 15px, rgba(168, 196, 204, 0.05) 15px 16px),
-    repeating-linear-gradient(90deg, transparent 0 15px, rgba(168, 196, 204, 0.05) 15px 16px);
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 15px,
+      rgba(168, 196, 204, 0.05) 15px 16px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 15px,
+      rgba(168, 196, 204, 0.05) 15px 16px
+    );
   border-color: rgba(138, 101, 68, 0.5);
 }
 
@@ -759,7 +834,7 @@ main {
 
 /* Lien vertical entre un nœud et son prérequis. */
 .card.node.linked::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 50%;
   top: -9px;
@@ -786,7 +861,11 @@ main {
 .dissolve-scene {
   position: relative;
   overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 110%, #241f33 0%, var(--stone-1) 70%);
+  background: radial-gradient(
+    120% 90% at 50% 110%,
+    #241f33 0%,
+    var(--stone-1) 70%
+  );
   border-color: rgba(224, 208, 255, 0.22);
 }
 

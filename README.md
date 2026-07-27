@@ -74,18 +74,37 @@ prestige plafonnerait à la fin du contenu et n'aurait plus rien à mordre.
 | Encoches d'affinage sur le cadre, une par 5 niveaux | ✅ |
 | Recherche gravée sur papier huilé, nœuds acquis en ambre | ✅ |
 | Dissolution : écran sombre, éclats qui montent, **mur des six legs** | ✅ `src/ui/LegacyWall.tsx` |
-| Sprites pixel art 64×64 en atlas PNG, 7 animations du héros, 24 ennemis | ⬜ à produire |
+| Sprites illustrés en spritesheets, héros et ennemis animés | ✅ dossier `hd/` |
+| Icônes d'équipement et chaudron en sprites | ⬜ disponibles dans `hd/`, pas encore branchés |
 
-Les sprites pixel art ne sont pas produits : je ne peux pas les dessiner. À la
-place, `src/ui/Sprites.tsx` pose des silhouettes SVG qui respectent les règles de
-lecture (forme avant détail, contour clair pour tenir en niveaux de gris) et qui
-exposent déjà les mêmes états (`idle`, `throw`, `hurt`, `death`) qu'une
-spritesheet remplacera sans toucher aux vues.
+### Sprites
 
-Deux détails d'implémentation qui évitent des régressions : le miroir de l'ennemi
-est appliqué **dans** le SVG et sa taille de gardien passe par `width`, pour
-qu'aucune animation CSS de `transform` ne les écrase. Toutes les animations sont
-désactivées sous `prefers-reduced-motion`.
+Les personnages viennent du dossier `hd/` (spritesheets illustrées, un fichier
+par animation, décrites par `hd/manifest.json`). Les images servies sont copiées
+dans `public/sprites/` ; `src/ui/Sprite.tsx` les rend, `src/game/sprites.ts`
+lit le manifeste.
+
+L'échelle passe par un `zoom` appliqué à la taille **native** du sprite, jamais
+par une hauteur imposée : sans ça, le rat de cale (112 × 64) s'affiche à la
+taille d'un homme.
+
+Il n'existe que quatre jeux d'ennemis pour six districts : chaque district
+associe ses ennemis nommés à un sprite (`DISTRICTS[].sprites`) et les reteinte,
+plutôt que d'exiger 24 jeux. Le Puits Prismatique utilise `self` — l'« Écho de
+soi » est le sprite du joueur, comme le demande le document.
+
+Le miroir de l'ennemi est appliqué **au dessin**, pas à la boîte : la boîte porte
+l'animation d'entrée, et une animation de `transform` écraserait un miroir posé
+au même endroit. Toutes les animations sont désactivées sous
+`prefers-reduced-motion`, et aucune ne tourne quand l'onglet est masqué.
+
+### Choix du personnage
+
+Au premier lancement, le joueur choisit parmi quatre habitants de la ville noyée
+(`src/game/characters.ts`). Le choix est **purement cosmétique** : l'équilibrage
+a été simulé sur 72 h, et des bonus par personnage rendraient irrattrapable une
+décision prise à la première minute, sans information. Les sauvegardes
+antérieures gardent l'alchimiste sans revoir l'écran.
 
 ## Systèmes en place
 
@@ -174,7 +193,8 @@ src/game/
   modifiers.ts  mods(state) : point d'entrée unique des formules (recherche × legs)
 src/ui/         Vues Brume / Laboratoire / Élixirs / Recherche / Dissolution
   Fog.tsx       La brume : canvas unique en surcouche
-  Sprites.tsx   Silhouettes du héros et des ennemis (SVG, en attente du pixel art)
+  Sprite.tsx    Rendu des spritesheets HD
+  CharacterSelect.tsx  Le choix du personnage, au premier lancement
   Cauldron.tsx  Le laboratoire en coupe : le chaudron raconte l'état du jeu
   LegacyWall.tsx  Les six legs accrochés au mur, illuminés à l'achat
 ```

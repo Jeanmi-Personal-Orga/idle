@@ -29,3 +29,10 @@ android/
 
 # Artefacts de build Docker
 out/
+
+# Packs d'assets tiers déposés à la racine : licences non vérifiées, et
+# « Cauldron's Brew » interdit explicitement la redistribution. À garder en
+# local tant que la question de la licence n'est pas tranchée.
+/Assets Side View Characters 1.rar
+/Cauldron's Brew.zip
+/Cauldron's Brew/

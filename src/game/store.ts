@@ -7,6 +7,7 @@ import {
   step,
   type CombatEvent,
 } from './engine';
+import { DEFAULT_CHARACTER } from './characters';
 import type { GameState } from './types';
 
 const KEY = 'brume.save.v1';
@@ -162,6 +163,12 @@ function migrate(save: GameState): GameState | null {
     save.resources.shard = 0;
     save.ascension = { count: 0, legacies: {}, deepest: save.combat.district };
     save.version = 3;
+  }
+  if (save.version === 3) {
+    // v4 : choix du personnage. Une partie déjà commencée garde l'alchimiste
+    // plutôt que de se voir imposer un sélecteur au milieu de l'aventure.
+    save.character = DEFAULT_CHARACTER;
+    save.version = 4;
   }
   return save.version === SAVE_VERSION ? save : null;
 }

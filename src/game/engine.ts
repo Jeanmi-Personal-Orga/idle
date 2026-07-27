@@ -20,9 +20,10 @@ import {
 import { ascMods, hasUnlockedAscension, shardGain } from './ascension';
 import { mods as allMods } from './modifiers';
 import { insightReward } from './tech';
+import type { CharacterId } from './characters';
 import type { GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 let idCounter = 0;
 const nextId = () => `i${Date.now().toString(36)}${(idCounter++).toString(36)}`;
@@ -46,6 +47,8 @@ export function makeEnemy(
 export function newGame(): GameState {
   const state: GameState = {
     version: SAVE_VERSION,
+    // null : le sélecteur de personnage s'affiche au premier lancement.
+    character: null,
     resources: { essence: 0, reagent: 6, insight: 0, shard: 0 },
     labLevel: 1,
     tech: {},
@@ -329,6 +332,10 @@ export function ascend(state: GameState): number {
     `Dissolution n°${state.ascension.count} : ${gain} éclats. La brume se referme.`,
   );
   return gain;
+}
+
+export function chooseCharacter(state: GameState, id: CharacterId) {
+  state.character = id;
 }
 
 export function upgradeLab(state: GameState): boolean {

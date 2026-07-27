@@ -120,31 +120,49 @@ export const SLOTS: {
 
 export const slotDef = (id: SlotId) => SLOTS.find((s) => s.id === id)!;
 
-/** Districts de la ville noyée. Chaque district multiplie la difficulté et les gains. */
-export const DISTRICTS: { name: string; enemies: string[] }[] = [
+/**
+ * Districts de la ville noyée. Chaque district multiplie la difficulté et les gains.
+ *
+ * `sprites` associe un sprite HD à chaque ennemi nommé : les deux archétypes de
+ * vague, puis le gardien. Il n'existe que quatre jeux de sprites, donc ils sont
+ * réemployés d'un district à l'autre — la teinte du district les distingue.
+ * `self` est un cas à part : c'est le reflet du joueur, tel que le demande la
+ * direction artistique pour Le Puits Prismatique.
+ */
+export const DISTRICTS: {
+  name: string;
+  enemies: [string, string, string];
+  sprites: [string, string, string];
+}[] = [
   {
-    name: "Les Quais Bas",
-    enemies: ["Rôdeur de vase", "Noyé pâle", "Nuée de brume"],
+    name: 'Les Quais Bas',
+    enemies: ['Rôdeur de vase', 'Noyé pâle', 'Nuée de brume'],
+    sprites: ['rat-de-cale', 'docker-noye', 'contremaitre'],
   },
   {
-    name: "Le Marché Noyé",
-    enemies: ["Marchand creux", "Verrier fêlé", "Chien de saumure"],
+    name: 'Le Marché Noyé',
+    enemies: ['Marchand creux', 'Verrier fêlé', 'Chien de saumure'],
+    sprites: ['docker-noye', 'ferrailleur', 'contremaitre'],
   },
   {
-    name: "La Verrerie",
-    enemies: ["Souffleur brisé", "Automate de plomb", "Four hurlant"],
+    name: 'La Verrerie',
+    enemies: ['Souffleur brisé', 'Automate de plomb', 'Four hurlant'],
+    sprites: ['ferrailleur', 'docker-noye', 'contremaitre'],
   },
   {
-    name: "Les Citernes",
-    enemies: ["Filtreur aveugle", "Anguille de mercure", "Gardien calcifié"],
+    name: 'Les Citernes',
+    enemies: ['Filtreur aveugle', 'Anguille de mercure', 'Gardien calcifié'],
+    sprites: ['docker-noye', 'rat-de-cale', 'contremaitre'],
   },
   {
     name: "L'Observatoire",
-    enemies: ["Astronome dissous", "Prisme errant", "Œil de brume"],
+    enemies: ['Astronome dissous', 'Prisme errant', 'Œil de brume'],
+    sprites: ['ferrailleur', 'rat-de-cale', 'contremaitre'],
   },
   {
-    name: "Le Puits Prismatique",
-    enemies: ["Écho de soi", "Condensat", "Le Distillateur"],
+    name: 'Le Puits Prismatique',
+    enemies: ['Écho de soi', 'Condensat', 'Le Distillateur'],
+    sprites: ['self', 'docker-noye', 'contremaitre'],
   },
 ];
 
@@ -160,6 +178,12 @@ export const districtAt = (depth: number) =>
 export const cycleOf = (depth: number) => Math.floor(depth / DISTRICTS.length);
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+
+/** Sprite de l'ennemi courant, dans la même logique que `enemyName`. */
+export function enemySprite(depth: number, wave: number): string {
+  const d = districtAt(depth);
+  return wave === WAVES_PER_DISTRICT ? d.sprites[2] : d.sprites[wave % 2];
+}
 
 export function districtLabel(depth: number): string {
   const cycle = cycleOf(depth);
