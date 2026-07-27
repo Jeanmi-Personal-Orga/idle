@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { formatNum } from './game/engine';
 import { RESOURCES, type ResourceId } from './game/resources';
-import { ResIcon } from './ui/ResIcon';
+import { ResourceTicker } from './ui/ResourceTicker';
 import { useGame, useGameLoop } from './game/store';
 import { BrumeView } from './ui/BrumeView';
 import { TechView } from './ui/TechView';
@@ -82,9 +81,7 @@ export default function App() {
             et ce à quoi elles servent viennent de `resources.ts`. */}
         <div className="resources">
           {RESOURCES.filter((r) => visibleResource(state, r.id)).map((r) => (
-            <span key={r.id} className={`res-${r.id}`} title={`${r.name} — ${r.use}`}>
-              <ResIcon id={r.id} /> {formatNum(state.resources[r.id])}
-            </span>
+            <ResourceTicker key={r.id} id={r.id} />
           ))}
         </div>
         {session ? (

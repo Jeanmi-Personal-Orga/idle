@@ -27,14 +27,14 @@ export const RESOURCES: ResourceDef[] = [
   },
   {
     id: 'reagent',
-    name: 'Matériaux',
+    name: "Essence d'équipement",
     icon: '/sprites/ui/reagent.png',
     color: 'var(--reagent)',
     use: 'Lance une distillation dans le chaudron.',
   },
   {
     id: 'insight',
-    name: 'Savoir',
+    name: 'Essence de tech',
     icon: '/sprites/ui/insight.png',
     color: 'var(--insight)',
     use: "Débloque des niveaux dans l'arbre de recherche.",

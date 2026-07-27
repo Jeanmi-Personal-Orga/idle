@@ -294,8 +294,8 @@ main {
   font-size: 13px;
 }
 .card.compact .lab-scene {
-  max-height: 120px;
-  border-radius: 10px;
+  /* Plus grand, et sans cadre : le chaudron occupe la carte du laboratoire. */
+  max-height: 170px;
 }
 
 /* Le chaudron mérite un peu de mise en scène : un filet doré, une lueur douce. */
@@ -735,8 +735,10 @@ main {
 .lab-scene {
   width: 100%;
   height: auto;
-  border-radius: 10px;
   display: block;
+  /* Aucun fond : le chaudron vit dans la carte du laboratoire, pas dans un
+     cadre à part. */
+  background: none;
 }
 
 .lab-scene.clickable {
@@ -1381,4 +1383,58 @@ nav .icon {
   image-rendering: pixelated;
   vertical-align: -2px;
   width: auto;
+}
+
+/* --- Compteurs de ressources : un gain doit se voir --- */
+
+.ticker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+@keyframes bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.ticker .bumped {
+  display: inline-block;
+  animation: bump 0.35s ease-out;
+}
+
+@keyframes gain-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -18px);
+  }
+}
+
+.ticker .gain {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--essence);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: gain-rise 0.9s ease-out forwards;
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatDuration, formatNum } from '../game/engine';
+import { skipCost } from '../game/formulas';
 import { resourceDef } from '../game/resources';
 import { ResIcon } from './ResIcon';
 import { store, useGame } from '../game/store';
@@ -130,19 +131,36 @@ function NodeCard({ node, color }: { node: TechNode; color: string }) {
         <>
           <div className="muted small">Prochain : {node.effect(level + 1)}</div>
           {active ? (
-            <div className="row">
-              <div className="muted small">
-                Recherche en cours · {formatDuration(state.researching!.remaining)} restant
+            <>
+              {/* La recherche en cours se voit, et s'achète : le bouton est
+                  toujours là, avec son prix en sacs d'or au prorata du temps. */}
+              <div className="bar">
+                <div
+                  className="fill"
+                  style={{
+                    width: `${
+                      (1 - state.researching!.remaining / state.researching!.total) * 100
+                    }%`,
+                    background: color,
+                  }}
+                />
               </div>
-              {state.resources.shard > 0 && (
+              <div className="row between">
+                <div className="muted small">
+                  {formatDuration(state.researching!.remaining)} restant
+                </div>
                 <button
-                  className="ghost"
+                  disabled={state.resources.goldCoin < skipCost(state.researching!.remaining)}
                   onClick={() => store.act((s) => researchWithGold(s, node.id))}
                 >
-                  Finir avec de l'or
+                  Finir maintenant
+                  <span className="muted small">
+                    {formatNum(skipCost(state.researching!.remaining))}{' '}
+                    <ResIcon id="goldCoin" size={13} />
+                  </span>
                 </button>
-              )}
-            </div>
+              </div>
+            </>
           ) : (
             <div className="row">
               <button

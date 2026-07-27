@@ -3,59 +3,6 @@ import { purityWeights } from '../game/formulas';
 import type { GameState } from '../game/types';
 import type { Mods } from '../game/modifiers';
 
-let propUid = 0;
-
-/**
- * Une case d'une planche de décor (96 × 96, famille `Cauldron and Powder`,
- * `Jars`, `Candles`, etc.), croppée via un `<clipPath>` : c'est le moyen le
- * plus simple de n'afficher qu'une case sans découper les images au préalable.
- */
-function PropIcon({
-  sheet,
-  cols,
-  rows,
-  x,
-  y,
-  px,
-  py,
-  size = 12,
-  opacity = 1,
-}: {
-  /** Chemin de la planche complète. */
-  sheet: string;
-  /** Dimensions de la planche, en cases. */
-  cols: number;
-  rows: number;
-  /** Case voulue, colonne puis ligne (0-indexé). */
-  x: number;
-  y: number;
-  /** Position dans la scène, en unités du viewBox. */
-  px: number;
-  py: number;
-  /** Côté de la case affichée, en unités du viewBox. */
-  size?: number;
-  opacity?: number;
-}) {
-  const id = `prop-${++propUid}`;
-  return (
-    <g transform={`translate(${px}, ${py})`} opacity={opacity}>
-      <clipPath id={id}>
-        <rect x="0" y="0" width={size} height={size} />
-      </clipPath>
-      <g clipPath={`url(#${id})`}>
-        <image
-          href={sheet}
-          x={-x * size}
-          y={-y * size}
-          width={cols * size}
-          height={rows * size}
-          preserveAspectRatio="none"
-        />
-      </g>
-    </g>
-  );
-}
-
 /**
  * Le laboratoire en coupe (direction-artistique.md §4). Le chaudron raconte
  * l'état du jeu sans un seul chiffre :
@@ -80,18 +27,10 @@ export function Cauldron({
   const lit = state.resources.reagent > 0 || !!d;
   const brewing = !!d;
 
-  // La vapeur — et le contenu du chaudron — prennent la couleur du palier le
-  // plus probable. La planche `Cauldron and Powder` offre dix teintes de
-  // contenu : voici celle qui correspond à chaque palier de pureté.
+  // La vapeur prend la couleur du palier le plus probable.
   const weights = purityWeights(state.labLevel, mods);
-  const likely = Math.max(0, weights.indexOf(Math.max(...weights)));
-  const vapour = PURITIES[likely].color;
-  const CAULDRON_COLUMN = [9, 10, 7, 5, 1, 6];
-  // Ligne 1 : chaudron sans feu. Ligne 2 : le même, flammes dessous.
-  // Feu allumé dès qu'il reste des matériaux — c'est le signal « prêt à
-  // fabriquer ». Éteint et gris quand il n'y a plus rien à mettre dedans.
-  const potColumn = lit ? CAULDRON_COLUMN[likely] : 9;
-  const potRow = lit ? 2 : 1;
+  const likely = weights.indexOf(Math.max(...weights));
+  const vapour = PURITIES[Math.max(0, likely)].color;
 
   const lvl = state.labLevel;
 
@@ -111,16 +50,13 @@ export function Cauldron({
       }
       onClick={onClick}
     >
-      {/* Mur et sol de pierre noyée. */}
-      <rect x="0" y="0" width="200" height="130" fill="#1a1d26" />
-      <rect x="0" y="104" width="200" height="26" fill="#262b36" />
+      {/* Pas de mur ni de sol peints : la scène est transparente et s'assoit sur
+          le fond de la carte, pour que tout appartienne au même laboratoire.
+          Seule une ombre au sol pose les objets. */}
+      <ellipse cx="100" cy="106" rx="92" ry="7" fill="rgba(0,0,0,0.35)" />
 
       {/* Le mur du fond s'ouvre sur la brume passé le niveau 100 (§4). */}
       {lvl >= 100 && <rect x="120" y="14" width="66" height="60" fill="#3d4557" opacity="0.5" />}
-      {/* Un regard dans la brume — clin d'œil discret pour qui reste assez longtemps. */}
-      {lvl >= 100 && (
-        <PropIcon sheet="/sprites/props/eyes.png" cols={8} rows={4} x={2} y={1} px={148} py={26} size={16} opacity={0.75} />
-      )}
 
       {/* Étagères et fioles rangées : à partir du niveau 11. */}
       {lvl >= 11 && (
@@ -138,9 +74,6 @@ export function Cauldron({
               opacity="0.85"
             />
           ))}
-          {/* Deux vrais bocaux de la planche `Jars`, au bout de l'étagère. */}
-          <PropIcon sheet="/sprites/props/jars.png" cols={10} rows={6} x={0} y={0} px={4} py={18} size={14} />
-          <PropIcon sheet="/sprites/props/jars.png" cols={10} rows={6} x={1} y={0} px={18} py={18} size={14} />
         </g>
       )}
 
@@ -150,11 +83,6 @@ export function Cauldron({
           <rect x="150" y="60" width="16" height="20" rx="3" fill="#3d4557" stroke="#545d72" />
           <rect x="170" y="66" width="12" height="14" rx="3" fill="#3d4557" stroke="#545d72" />
           <rect x="146" y="86" width="42" height="3" fill="#4a3324" />
-          {/* Une paire de bougies pour la lumière d'ambiance, près du chat. */}
-          <PropIcon sheet="/sprites/props/candles.png" cols={16} rows={10} x={0} y={0} px={44} py={88} size={13} />
-          <PropIcon sheet="/sprites/props/candles.png" cols={16} rows={10} x={2} y={0} px={56} py={88} size={13} />
-          {/* Un outil accroché au mur des alambics secondaires. */}
-          <PropIcon sheet="/sprites/props/equipment.png" cols={8} rows={8} x={1} y={2} px={170} py={60} size={15} />
         </g>
       )}
 
@@ -169,43 +97,35 @@ export function Cauldron({
         <path d="M16 95 H36 M26 86 V104" stroke="#2f2016" strokeWidth="1" />
       </g>
 
-      {/* Une plante en pot, au sol contre la caisse : niveau 11, aux côtés des étagères. */}
-      {lvl >= 11 && (
-        <PropIcon sheet="/sprites/props/plants.png" cols={8} rows={6} x={0} y={0} px={2} py={86} size={18} />
-      )}
-
-      {/* Un gemme et une fiole posés sur la caisse : purement décoratif. */}
-      <PropIcon sheet="/sprites/props/gems.png" cols={7} rows={6} x={0} y={0} px={18} py={74} size={12} />
-      <PropIcon sheet="/sprites/props/potions.png" cols={19} rows={12} x={1} y={0} px={28} py={74} size={12} />
-
-      {/* Poudre et bocal du même sachet que le chaudron, posés devant le foyer. */}
-      <PropIcon sheet="/sprites/props/cauldron.png" cols={12} rows={7} x={4} y={4} px={116} py={92} size={14} opacity={0.9} />
-      <PropIcon sheet="/sprites/props/cauldron.png" cols={12} rows={7} x={7} y={5} px={132} py={94} size={12} opacity={0.85} />
-
-      {/* Le chaudron : l'asset de la planche, pièce maîtresse de la scène.
-          Sa couleur dit le palier attendu, ses flammes disent qu'il chauffe. */}
-      <PropIcon
-        sheet="/sprites/props/cauldron.png"
-        cols={12}
-        rows={7}
-        x={potColumn}
-        y={potRow}
-        px={36}
-        py={36}
-        size={78}
-      />
-      {/* Bulles au-dessus de la gueule du chaudron pendant la distillation. */}
-      {brewing && (
-        <g className="bubbles">
-          <circle cx="64" cy="55" r="2" fill={vapour} />
-          <circle cx="75" cy="52" r="1.6" fill={vapour} />
-          <circle cx="85" cy="55" r="1.2" fill={vapour} />
-        </g>
-      )}
-
-      {/* Col de cygne : la vapeur part du chaudron vers le serpentin. */}
+      {/* Le chaudron, cuivré et cabossé, sur son foyer. */}
       <path
-        d="M92 50 C102 38, 112 34, 116 42"
+        d="M50 58 H104 L98 96 H56 Z"
+        fill={lit ? '#8a6544' : '#4a4f5c'}
+        stroke="#4a3324"
+        strokeWidth="2"
+      />
+      <ellipse cx="77" cy="58" rx="27" ry="5.5" fill={lit ? '#6b4b34' : '#3d4557'} />
+      {/* Le liquide bouillonne pendant la distillation. */}
+      {brewing && (
+        <>
+          <ellipse cx="77" cy="58" rx="23" ry="4" fill={vapour} opacity="0.85" />
+          <g className="bubbles">
+            <circle cx="68" cy="56" r="2" fill={vapour} />
+            <circle cx="80" cy="55" r="1.6" fill={vapour} />
+            <circle cx="87" cy="57" r="1.2" fill={vapour} />
+          </g>
+        </>
+      )}
+
+      {/* Chapiteau et col de cygne : le liquide s'évapore et part vers la droite. */}
+      <path
+        d="M62 56 C64 44, 90 44, 92 56"
+        fill={lit ? '#6b4b34' : '#3d4557'}
+        stroke="#4a3324"
+        strokeWidth="2"
+      />
+      <path
+        d="M77 44 C77 34, 112 32, 116 42"
         fill="none"
         stroke="#8a6544"
         strokeWidth="3.5"
@@ -225,10 +145,19 @@ export function Cauldron({
       {brewing && (
         <g className="vapour">
           {[0, 1, 2].map((i) => (
-            <circle key={i} cx={104 + i * 6} cy={32 - i * 4} r={2.5 + i} fill={vapour} opacity="0.55" />
+            <circle key={i} cx={92 + i * 7} cy={36 - i * 4} r={2.5 + i} fill={vapour} opacity="0.55" />
           ))}
         </g>
       )}
+
+      {/* Foyer : braises vives s'il reste des réactifs, éteint sinon. */}
+      <g className="embers">
+        <path d="M58 96 H96 L92 104 H62 Z" fill={lit ? '#3a2a1e' : '#22252e'} />
+        {lit &&
+          [0, 1, 2, 3].map((i) => (
+            <circle key={i} cx={66 + i * 8} cy={100} r={2.2} fill="#ff9d4a" opacity={0.9} />
+          ))}
+      </g>
 
       {/* Fiole de collecte sur son support : le liquide qui monte EST la barre. */}
       <g>

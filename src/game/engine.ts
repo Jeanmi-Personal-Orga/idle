@@ -1,4 +1,4 @@
-import { MISSION_CATALYST_REWARD, MISSION_WAVE_INTERVAL, PURITIES, SLOTS, purity, WAVES_PER_DISTRICT, districtAt, districtLabel, enemySprite, purityIndex, slotDef } from './content';
+import { MISSION_REWARD, MISSION_WAVE_INTERVAL, PURITIES, SLOTS, purity, WAVES_PER_DISTRICT, districtAt, districtLabel, enemySprite, purityIndex, slotDef } from './content';
 import {
   attackInterval,
   GOLD_OFFERS,
@@ -291,8 +291,18 @@ function onWaveCleared(state: GameState, rng: () => number) {
   // nouvelle meilleure vague rapporte des catalyseurs — la vraie récompense « on
   // skip l'attente ».
   if (isNewBest && c.wave % MISSION_WAVE_INTERVAL === 0 && c.wave < WAVES_PER_DISTRICT) {
-    state.resources.catalyst += MISSION_CATALYST_REWARD;
-    pushLog(state, `Contrat rempli : vague ${c.wave} nettoyée. +${MISSION_CATALYST_REWARD} catalyseurs.`);
+    // Le contrat paie en essences, proportionnellement à la profondeur.
+    const scale = 1 + c.district;
+    const essence = MISSION_REWARD.essence * scale;
+    const reagent = MISSION_REWARD.reagent * scale;
+    const insight = MISSION_REWARD.insight * scale;
+    state.resources.essence += essence;
+    state.resources.reagent += reagent;
+    state.resources.insight += insight;
+    pushLog(
+      state,
+      `Contrat rempli, vague ${c.wave} : +${formatNum(essence)} essence, +${reagent} d'équipement, +${insight} de tech.`,
+    );
   }
 
   c.best = Math.max(c.best, c.wave);
@@ -374,16 +384,11 @@ export function startRandomDistillation(state: GameState): boolean {
   return startDistillation(state, slot);
 }
 
-/** Dépense un catalyseur pour terminer la distillation en cours sur-le-champ. */
-export function skipDistillation(state: GameState): boolean {
-  if (!state.distilling) return false;
-  const cost = skipCost(state.distilling.remaining);
-  if (state.resources.goldCoin < cost) return false;
-  state.resources.goldCoin -= cost;
-  state.distilling.remaining = 0;
-  collectDistillation(state);
-  return true;
-}
+/**
+ * Aucune façon de sauter une fabrication : les deux ou trois secondes de
+ * chaudron sont le geste lui-même, pas une attente à racheter. Seuls les longs
+ * chantiers — travaux du laboratoire, recherches — s'achètent en sacs d'or.
+ */
 
 export function collectDistillation(state: GameState, rng: () => number = Math.random): Item | null {
   const d = state.distilling;

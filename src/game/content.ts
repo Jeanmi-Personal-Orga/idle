@@ -225,9 +225,15 @@ export const DISTRICTS: {
 
 export const WAVES_PER_DISTRICT = 20;
 
-/** Une vague de contrat tombe toutes les 10 paliers, et rapporte des catalyseurs. */
+/**
+ * Un contrat tombe toutes les 10 vagues d'un chapitre. Il ne paie qu'en
+ * essences — les trois : celle du laboratoire, celle de l'équipement et celle de
+ * la recherche. C'est la seule source d'essence de tech.
+ */
 export const MISSION_WAVE_INTERVAL = 10;
-export const MISSION_CATALYST_REWARD = 2;
+
+/** Récompense d'un contrat, multipliée par la profondeur du chapitre. */
+export const MISSION_REWARD = { essence: 120, reagent: 8, insight: 4 };
 
 /**
  * Prochaine vague de contrat non encore atteinte dans le chapitre courant, ou

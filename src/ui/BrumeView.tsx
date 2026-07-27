@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  MISSION_CATALYST_REWARD,
+  MISSION_REWARD,
   MISSION_WAVE_INTERVAL,
   PURITIES,
   SLOTS,
@@ -18,7 +18,6 @@ import {
   formatDuration,
   formatNum,
   setAutoDistill,
-  skipDistillation,
   skipLabUpgrade,
   startRandomDistillation,
   upgradeLab,
@@ -102,6 +101,11 @@ export function BrumeView() {
             name="Toi"
             hp={c.hero.hp}
             max={s.health}
+            // Ce qu'on encaisse à chaque salve adverse : la seule information
+            // vraiment utile pour savoir si on va tenir.
+            note={`−${formatNum(
+              c.enemies.reduce((sum, e) => sum + (e.hp > 0 ? e.damage : 0), 0),
+            )} par salve`}
           />
           <FighterBar
             side="foe"
@@ -154,7 +158,7 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
   const [showLoop, setShowLoop] = useState(false);
 
   return (
-    <div className="card scene compact lab-card">
+    <div className="card compact lab-card">
       <Cauldron
         state={state}
         mods={mods}
@@ -179,18 +183,6 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
             )}
           </div>
           <div className="row">
-            {d && (
-              <button
-                className="ghost"
-                disabled={state.resources.goldCoin < skipCost(d.remaining)}
-                onClick={() => store.act((s) => skipDistillation(s))}
-              >
-                Finir maintenant
-                <span className="muted small">
-                  {formatNum(skipCost(d.remaining))} <ResIcon id="goldCoin" size={14} />
-                </span>
-              </button>
-            )}
             <button
               className={`ghost ${state.autoDistill ? "active" : ""}`}
               title="Fabriquer en boucle, et choisir ce qui est gardé"
@@ -558,6 +550,7 @@ function InfoPopup({ onClose }: { onClose: () => void }) {
 
 /** Popup « 🎯 » : la vague de contrat à venir dans ce chapitre, et sa récompense. */
 function MissionPopup({ best, onClose }: { best: number; onClose: () => void }) {
+  const state = useGame();
   const target = nextMissionWave(best);
   const progress = target ? Math.min(1, best / target) : 1;
 
@@ -582,7 +575,12 @@ function MissionPopup({ best, onClose }: { best: number; onClose: () => void }) 
             </div>
             <div className="row">
               <span className="res-catalyst">
-                <ResIcon id="catalyst" size={14} /> +{MISSION_CATALYST_REWARD} à la vague {target}
+                <ResIcon id="essence" size={13} /> +
+                {formatNum(MISSION_REWARD.essence * (1 + state.combat.district))} ·{' '}
+                <ResIcon id="reagent" size={13} /> +
+                {MISSION_REWARD.reagent * (1 + state.combat.district)} ·{' '}
+                <ResIcon id="insight" size={13} /> +
+                {MISSION_REWARD.insight * (1 + state.combat.district)} à la vague {target}
               </span>
             </div>
           </>
