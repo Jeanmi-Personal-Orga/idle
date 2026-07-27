@@ -23,7 +23,13 @@ import {
 import { ascMods, canAscend, shardGain } from './ascension';
 import { mods as allMods } from './modifiers';
 import { NEUTRAL_MODS, advanceResearch, insightReward } from './tech';
-import { KEYS_PER_DAY, campaignDef, campaignDepth, type Campaign } from './campaigns';
+import {
+  KEYS_PER_DAY,
+  campaignDef,
+  campaignDepth,
+  campaignRewards,
+  type Campaign,
+} from './campaigns';
 import { spriteStyle } from './characters';
 import type { CharacterId } from './characters';
 import type { Enemy, GameState, Item, SlotId } from './types';
@@ -363,19 +369,17 @@ function onWaveCleared(state: GameState, rng: () => number) {
       return;
     }
     if (c.campaign.wave >= campaign.waves) {
-      // Le paiement suit la progression du joueur : une campagne reste utile
-      // longtemps après sa première réussite.
-      const amount = Math.ceil(campaign.payout * (1 + state.ascension.deepest));
-      state.resources[campaign.reward] += amount;
+      // Les trois essences sont payées, avec une part triple pour celle que la
+      // mission met en avant. Le montant suit sa difficulté et la progression.
+      const reward = campaignRewards(campaign, state.ascension.deepest);
+      state.resources.essence += reward.essence;
+      state.resources.reagent += reward.reagent;
+      state.resources.insight += reward.insight;
       pushLog(
         state,
-        `${campaign.name} achevée : +${formatNum(amount)} ${
-          campaign.reward === 'essence'
-            ? 'essence'
-            : campaign.reward === 'reagent'
-              ? "d'équipement"
-              : 'de tech'
-        }.`,
+        `${campaign.name} achevée : +${formatNum(reward.essence)} essence, +${formatNum(
+          reward.reagent,
+        )} d'équipement, +${formatNum(reward.insight)} de tech.`,
       );
       leaveCampaign(state, 'Retour au chapitre.');
       return;

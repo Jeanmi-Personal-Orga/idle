@@ -18,7 +18,7 @@ type Tab = 'brume' | 'camp' | 'tech' | 'shop' | 'ascend';
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'shop', label: 'Boutique', icon: '💰' },
   { id: 'brume', label: 'Brume', icon: '☁' },
-  { id: 'camp', label: 'Campagnes', icon: '🗺' },
+  { id: 'camp', label: 'Missions', icon: '🎯' },
   { id: 'tech', label: 'Recherche', icon: '◇' },
   { id: 'ascend', label: 'Dissolution', icon: '★' },
 ];
@@ -104,7 +104,7 @@ export default function App() {
 
       <main>
         {tab === 'brume' && <BrumeView />}
-        {tab === 'camp' && <CampaignView onStarted={() => setTab('brume')} />}
+        {tab === 'camp' && <CampaignView />}
         {tab === 'tech' && <TechView />}
         {tab === 'shop' && <ShopView />}
         {tab === 'ascend' && <AscendView />}
