@@ -1519,3 +1519,18 @@ nav .icon {
   padding: 6px 2px;
   font-size: 11px;
 }
+
+/* Comparaison d'une pièce avec celle portée : les écarts, en vert ou en rouge. */
+.card.compare {
+  background: rgba(13, 18, 24, 0.75);
+  border-style: dashed;
+  gap: 6px;
+}
+
+.better {
+  color: var(--essence);
+}
+
+.worse {
+  color: #ff8b9a;
+}

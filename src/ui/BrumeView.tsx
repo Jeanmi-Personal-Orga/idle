@@ -11,6 +11,7 @@ import {
   purity,
 } from "../game/content";
 import {
+  claimContract,
   collectDistillation,
   dissolve,
   dissolveAll,
@@ -28,6 +29,7 @@ import {
   powerScore,
   heroStats,
   itemScore,
+  itemStats,
   labUpgradeCost,
   labUpgradeDuration,
   purityWeights,
@@ -35,7 +37,7 @@ import {
 import { mods as allMods, type Mods } from "../game/modifiers";
 import { DEFAULT_CHARACTER } from "../game/characters";
 import { store, useGame } from "../game/store";
-import type { PurityId, SlotId, StatKey } from "../game/types";
+import type { Item, PurityId, SlotId, StatKey } from "../game/types";
 import { Arena, FighterBar } from "./Arena";
 import { Cauldron } from "./Cauldron";
 import { ItemCard, PurityLegend, SlotIcon } from "./ItemCard";
@@ -81,6 +83,8 @@ export function BrumeView() {
             <div className="row">
               <button className="ghost" title="Mission" onClick={() => setShowMissions(true)}>
                 🎯
+                {/* Pastille : une récompense attend d'être réclamée. */}
+                {state.pendingContract && <em className="badge dot" />}
               </button>
               <button className="ghost" title="Stats et équipement" onClick={() => setShowInfo(true)}>
                 ⓘ
@@ -426,6 +430,8 @@ function LoopPopup({ onClose }: { onClose: () => void }) {
  */
 function StashPopup({ onClose }: { onClose: () => void }) {
   const state = useGame();
+  /** Pièce ouverte en comparaison avec celle portée au même emplacement. */
+  const [compared, setCompared] = useState<string | null>(null);
   const [slots, setSlots] = useState<SlotId[]>([]);
   const [tiers, setTiers] = useState<PurityId[]>([]);
   const [subs, setSubs] = useState<StatKey[]>([]);
@@ -467,18 +473,26 @@ function StashPopup({ onClose }: { onClose: () => void }) {
         <div className="stack scroll">
           {shown.length === 0 && <div className="muted small">Aucune pièce ne correspond.</div>}
           {shown.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              actions={
-                <>
-                  <button onClick={() => store.act((st) => equip(st, item.id))}>Porter</button>
-                  <button className="ghost" onClick={() => store.act((st) => dissolve(st, item.id))}>
-                    Dissoudre
-                  </button>
-                </>
-              }
-            />
+            <div key={item.id} className="stack">
+              <ItemCard
+                item={item}
+                actions={
+                  <>
+                    <button onClick={() => setCompared(compared === item.id ? null : item.id)}>
+                      {compared === item.id ? 'Masquer' : 'Comparer'}
+                    </button>
+                    <button onClick={() => store.act((st) => equip(st, item.id))}>Porter</button>
+                    <button
+                      className="ghost"
+                      onClick={() => store.act((st) => dissolve(st, item.id))}
+                    >
+                      Dissoudre
+                    </button>
+                  </>
+                }
+              />
+              {compared === item.id && <Comparison candidate={item} />}
+            </div>
           ))}
         </div>
       </div>
@@ -486,6 +500,59 @@ function StashPopup({ onClose }: { onClose: () => void }) {
   );
 }
 
+
+/**
+ * Comparaison d'une pièce de la réserve avec celle portée au même emplacement.
+ *
+ * Une pièce peut être meilleure en dégâts et pire en survie : afficher l'écart
+ * statistique par statistique est la seule façon de trancher, et le total de
+ * puissance donne le verdict d'ensemble.
+ */
+function Comparison({ candidate }: { candidate: Item }) {
+  const state = useGame();
+  const worn = state.equipped[candidate.slot];
+  const from = worn ? itemStats(worn) : {};
+  const to = itemStats(candidate);
+  const keys = [...new Set([...Object.keys(from), ...Object.keys(to)])] as StatKey[];
+
+  // Puissance de l'équipement complet, une fois la pièce portée : le verdict.
+  const before = powerScore(heroStats(state));
+  const after = powerScore(
+    heroStats({ ...state, equipped: { ...state.equipped, [candidate.slot]: candidate } }),
+  );
+  const delta = after - before;
+
+  return (
+    <div className="card compare">
+      <div className="row between">
+        <div className="label">Comparé à ce que tu portes</div>
+        <b className={delta >= 0 ? 'better' : 'worse'}>
+          {delta >= 0 ? '+' : '−'}
+          {formatNum(Math.abs(delta))} puissance
+        </b>
+      </div>
+      {!worn && <div className="muted small">Emplacement vide : tout est un gain.</div>}
+      <div className="grid2">
+        {keys.map((k) => {
+          const a = from[k] ?? 0;
+          const b = to[k] ?? 0;
+          const diff = b - a;
+          if (Math.abs(diff) < 0.05) return null;
+          return (
+            <div key={k} className="statline">
+              <span className="muted">{STATS[k].name}</span>
+              <b className={diff > 0 ? 'better' : 'worse'}>
+                {diff > 0 ? '+' : '−'}
+                {formatNum(Math.abs(diff))}
+                {STATS[k].suffix}
+              </b>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /** Popup « ⓘ » : le visuel du héros, ses stats totales, et la pureté attendue. */
 function InfoPopup({ onClose }: { onClose: () => void }) {
@@ -556,6 +623,20 @@ function MissionPopup({ best, onClose }: { best: number; onClose: () => void }) 
           <div className="label">Mission</div>
           <button className="ghost" onClick={onClose}>✕</button>
         </div>
+        {state.pendingContract && (
+          <button
+            className="ascend"
+            onClick={() => store.act((st) => claimContract(st))}
+          >
+            Récupérer la récompense
+            <span className="muted small">
+              <ResIcon id="essence" size={13} /> {formatNum(state.pendingContract.essence)} ·{' '}
+              <ResIcon id="reagent" size={13} /> {formatNum(state.pendingContract.reagent)} ·{' '}
+              <ResIcon id="insight" size={13} /> {formatNum(state.pendingContract.insight)}
+            </span>
+          </button>
+        )}
+
         {target ? (
           <>
             <div className="muted small">

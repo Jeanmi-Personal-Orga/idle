@@ -23,11 +23,12 @@ import {
 import { ascMods, canAscend, shardGain } from './ascension';
 import { mods as allMods } from './modifiers';
 import { NEUTRAL_MODS, advanceResearch, insightReward } from './tech';
+import { campaignDef, type Campaign } from './campaigns';
 import { spriteStyle } from './characters';
 import type { CharacterId } from './characters';
 import type { Enemy, GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 13;
 
 /**
  * Temps qu'il faut pour traverser toute l'arène, en secondes. Les deux camps
@@ -103,6 +104,44 @@ export function makeEnemies(district: number, wave: number, damageMult = 1): Ene
   return out;
 }
 
+/**
+ * Ennemis d'une vague de campagne. On réutilise les courbes de la profondeur
+ * annoncée par la campagne, avec ses propres noms et sprites : la difficulté
+ * reste comparable à celle d'un chapitre connu.
+ */
+export function makeCampaignEnemies(campaign: Campaign, wave: number, damageMult = 1): Enemy[] {
+  const last = wave >= campaign.waves;
+  const scale = last ? 2.2 : 1;
+  const name = last ? `${campaign.enemies[2]} (gardien)` : campaign.enemies[wave % 2];
+  const sprite = last ? campaign.sprites[2] : campaign.sprites[wave % 2];
+  return [buildEnemy(campaign.depth, wave, damageMult, scale, name, sprite)];
+}
+
+/** Entre en campagne : le combat quitte le chapitre pour ses vagues à elle. */
+export function startCampaign(state: GameState, id: string): boolean {
+  const campaign = campaignDef(id);
+  if (!campaign || state.combat.campaign) return false;
+  state.combat.campaign = { id, wave: 1 };
+  state.combat.enemies = makeCampaignEnemies(campaign, 1, allMods(state).enemyDamageMult);
+  state.combat.closing = closingTime(state);
+  state.combat.hero.hp = heroStats(state).health;
+  pushLog(state, `Campagne : ${campaign.name}. ${campaign.waves} vagues, tout ou rien.`);
+  return true;
+}
+
+/** Quitte la campagne et remet le combat sur le chapitre courant. */
+export function leaveCampaign(state: GameState, reason: string) {
+  state.combat.campaign = null;
+  state.combat.enemies = makeEnemies(
+    state.combat.district,
+    state.combat.wave,
+    allMods(state).enemyDamageMult,
+  );
+  state.combat.closing = closingTime(state);
+  state.combat.hero.hp = heroStats(state).health;
+  pushLog(state, reason);
+}
+
 export function newGame(): GameState {
   const state: GameState = {
     version: SAVE_VERSION,
@@ -112,6 +151,7 @@ export function newGame(): GameState {
     labLevel: 1,
     tech: {},
     ascension: { count: 0, legacies: {}, deepest: 0 },
+    pendingContract: null,
     equipped: {},
     stash: [],
     distilling: null,
@@ -125,6 +165,7 @@ export function newGame(): GameState {
       best: 1,
       hero: { hp: 100, cooldown: 0 },
       enemies: makeEnemies(0, 1),
+      campaign: null,
       reviving: 0,
       closing: CLOSING_TIME / 2,
     },
@@ -196,6 +237,11 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
     c.hero.hp = Math.min(s.health, c.hero.hp + s.health * 0.4 * dt);
     if (c.reviving <= 0) {
       c.hero.hp = s.health;
+      if (c.campaign) {
+        // Tomber en campagne annule la campagne : rien n'est payé.
+        leaveCampaign(state, 'Tombé en campagne : rien à rapporter.');
+        return;
+      }
       c.wave = 1;
       c.enemies = makeEnemies(c.district, c.wave, allMods(state).enemyDamageMult);
       c.closing = closingTime(state);
@@ -276,6 +322,39 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
 function onWaveCleared(state: GameState, rng: () => number) {
   const c = state.combat;
   const mods = allMods(state);
+
+  // En campagne, aucun butin de vague : tout est payé à la dernière, ou rien.
+  if (c.campaign) {
+    const campaign = campaignDef(c.campaign.id);
+    if (!campaign) {
+      leaveCampaign(state, 'Campagne inconnue, retour au chapitre.');
+      return;
+    }
+    if (c.campaign.wave >= campaign.waves) {
+      // Le paiement suit la progression du joueur : une campagne reste utile
+      // longtemps après sa première réussite.
+      const amount = Math.ceil(campaign.payout * (1 + state.ascension.deepest));
+      state.resources[campaign.reward] += amount;
+      pushLog(
+        state,
+        `${campaign.name} achevée : +${formatNum(amount)} ${
+          campaign.reward === 'essence'
+            ? 'essence'
+            : campaign.reward === 'reagent'
+              ? "d'équipement"
+              : 'de tech'
+        }.`,
+      );
+      leaveCampaign(state, 'Retour au chapitre.');
+      return;
+    }
+    c.campaign.wave += 1;
+    c.enemies = makeCampaignEnemies(campaign, c.campaign.wave, mods.enemyDamageMult);
+    c.hero.cooldown = 0;
+    c.closing = closingTime(state);
+    return;
+  }
+
   const r = waveReward(c.district, c.wave);
   const guardian = c.wave >= WAVES_PER_DISTRICT;
   const isNewBest = c.wave > c.best;
@@ -293,16 +372,14 @@ function onWaveCleared(state: GameState, rng: () => number) {
   if (isNewBest && c.wave % MISSION_WAVE_INTERVAL === 0 && c.wave < WAVES_PER_DISTRICT) {
     // Le contrat paie en essences, proportionnellement à la profondeur.
     const scale = 1 + c.district;
-    const essence = MISSION_REWARD.essence * scale;
-    const reagent = MISSION_REWARD.reagent * scale;
-    const insight = MISSION_REWARD.insight * scale;
-    state.resources.essence += essence;
-    state.resources.reagent += reagent;
-    state.resources.insight += insight;
-    pushLog(
-      state,
-      `Contrat rempli, vague ${c.wave} : +${formatNum(essence)} essence, +${reagent} d'équipement, +${insight} de tech.`,
-    );
+    // Le gain s'empile en attente : c'est le joueur qui vient le chercher.
+    const previous = state.pendingContract ?? { essence: 0, reagent: 0, insight: 0 };
+    state.pendingContract = {
+      essence: previous.essence + MISSION_REWARD.essence * scale,
+      reagent: previous.reagent + MISSION_REWARD.reagent * scale,
+      insight: previous.insight + MISSION_REWARD.insight * scale,
+    };
+    pushLog(state, `Contrat rempli, vague ${c.wave} : récompense à récupérer.`);
   }
 
   c.best = Math.max(c.best, c.wave);
@@ -568,6 +645,23 @@ export function buyWithGold(state: GameState, resource: 'essence' | 'reagent' | 
   if (state.resources.goldCoin < cost) return false;
   state.resources.goldCoin -= cost;
   state.resources[resource] += offer.amount;
+  return true;
+}
+
+/** Encaisse la récompense de contrat en attente. */
+export function claimContract(state: GameState): boolean {
+  const reward = state.pendingContract;
+  if (!reward) return false;
+  state.resources.essence += reward.essence;
+  state.resources.reagent += reward.reagent;
+  state.resources.insight += reward.insight;
+  state.pendingContract = null;
+  pushLog(
+    state,
+    `Récompense encaissée : +${formatNum(reward.essence)} essence, +${formatNum(
+      reward.reagent,
+    )} d'équipement, +${formatNum(reward.insight)} de tech.`,
+  );
   return true;
 }
 

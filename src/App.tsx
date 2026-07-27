@@ -4,6 +4,7 @@ import { ResourceTicker } from './ui/ResourceTicker';
 import { useGame, useGameLoop } from './game/store';
 import { BrumeView } from './ui/BrumeView';
 import { TechView } from './ui/TechView';
+import { CampaignView } from './ui/CampaignView';
 import { AscendView } from './ui/AscendView';
 import { ShopView } from './ui/Shop';
 import { CharacterSelect } from './ui/CharacterSelect';
@@ -12,13 +13,16 @@ import { hasUnlockedAscension, shardGain } from './game/ascension';
 import { authStore, hasSkippedAuth, useAuth } from './game/auth';
 import type { GameState } from './game/types';
 
-type Tab = 'brume' | 'tech' | 'shop' | 'ascend';
+type Tab = 'brume' | 'camp' | 'tech' | 'shop' | 'ascend';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'brume', label: 'Brume', icon: '☁' },
+  { id: 'camp', label: 'Campagnes', icon: '🗺' },
   { id: 'tech', label: 'Recherche', icon: '◇' },
   { id: 'shop', label: 'Boutique', icon: '💰' },
-  { id: 'ascend', label: 'Dissolution', icon: '✧' },
+  // ♻ plutôt que ⚗ : l'alambic est déjà celui du laboratoire, et dissoudre
+  // c'est refondre pour repartir.
+  { id: 'ascend', label: 'Dissolution', icon: '♻' },
 ];
 
 /**
@@ -102,6 +106,7 @@ export default function App() {
 
       <main>
         {tab === 'brume' && <BrumeView />}
+        {tab === 'camp' && <CampaignView />}
         {tab === 'tech' && <TechView />}
         {tab === 'shop' && <ShopView />}
         {tab === 'ascend' && <AscendView />}

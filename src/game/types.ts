@@ -116,6 +116,11 @@ export interface CombatState {
   /** Vrai pendant la pause qui suit une mort. */
   reviving: number;
   /**
+   * Campagne en cours, s'il y en a une : le combat se déroule alors dans ses
+   * vagues et non dans celles du chapitre. Rien n'est payé avant la fin.
+   */
+  campaign: { id: string; wave: number } | null;
+  /**
    * Secondes restantes avant que les combattants soient au contact. Tant que ce
    * compte n'est pas écoulé, personne ne frappe : l'affichage et la simulation
    * racontent la même chose, et plus aucun coup ne part de l'autre bout de
@@ -147,6 +152,11 @@ export interface GameState {
   /** Niveau atteint par nœud de l'arbre de recherche (voir tech.ts). */
   tech: Record<string, number>;
   ascension: Ascension;
+  /**
+   * Récompense de contrat en attente. Elle ne tombe pas dans la poche toute
+   * seule : un bouton la réclame, sinon un gain silencieux passe inaperçu.
+   */
+  pendingContract: { essence: number; reagent: number; insight: number } | null;
   equipped: Partial<Record<SlotId, Item>>;
   stash: Item[];
   distilling: Distillation | null;

@@ -276,6 +276,16 @@ export function migrate(save: GameState): GameState | null {
     save.loopFilters = save.loopFilters ?? { tiers: [], subs: [] };
     save.version = 11;
   }
+  if (save.version === 11) {
+    // v12 : la récompense de contrat se récupère au bouton.
+    save.pendingContract = null;
+    save.version = 12;
+  }
+  if (save.version === 12) {
+    // v13 : campagnes.
+    save.combat.campaign = null;
+    save.version = 13;
+  }
   return save.version === SAVE_VERSION ? save : null;
 }
 
