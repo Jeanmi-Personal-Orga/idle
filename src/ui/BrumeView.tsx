@@ -578,8 +578,9 @@ function InfoPopup({ onClose }: { onClose: () => void }) {
           <div className="label">Composition</div>
           <button className="ghost" onClick={onClose}>✕</button>
         </div>
-        <div className="row between">
-          <Sprite character={hero} anim="idle" fallbackAnim={["idle"]} />
+        {/* Le personnage au centre : c'est lui que ces chiffres décrivent. */}
+        <div className="hero-portrait">
+          <Sprite character={hero} anim="idle" fallbackAnim={["idle"]} scale={1.3} />
         </div>
         <div className="grid2">
           {SHOWN.map((k) => {

@@ -1601,3 +1601,10 @@ nav .icon {
 .worse {
   color: #ff8b9a;
 }
+
+/* Portrait du héros, centré dans la fiche de composition. */
+.hero-portrait {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 2px;
+}

@@ -167,17 +167,38 @@ export function enemyName(district: number, wave: number): string {
   return d.enemies[wave % 2];
 }
 
-/** Progression de difficulté : douce dans un district, saut net entre districts.
- * `district` est la profondeur absolue, sans plafond (voir districtAt). */
+/**
+ * Difficulté des ennemis, recalée sur la formule de puissance.
+ *
+ * L'exigence d'un chapitre double presque à chaque palier (×1,9 sur les points de
+ * vie **et** sur les dégâts, donc ×1,9 sur la puissance conseillée), et monte de
+ * 6 % par vague à l'intérieur d'un chapitre. Les anciennes courbes montaient de
+ * ×9 par chapitre : le chapitre 9 réclamait 3,8 milliards de puissance quand un
+ * joueur au maximum absolu — laboratoire 40, cinq étoiles — en totalise 60
+ * millions. La progression était donc murée dès le sixième chapitre.
+ *
+ * Repères visés, avec l'équipement médian du niveau de laboratoire :
+ *
+ * | Étape | Puissance | Chapitre atteint |
+ * | --- | --- | --- |
+ * | laboratoire 5, sans étoile | 550 | 1 à 2 |
+ * | laboratoire 20, sans étoile | 10 000 | 5 |
+ * | laboratoire 40, sans étoile | 1,3 M | 13 |
+ * | laboratoire 40, cinq étoiles | 60 M | 19 |
+ *
+ * `district` est la profondeur absolue, sans plafond (voir districtAt).
+ */
+const CHAPTER_STEP = 1.9;
+const WAVE_STEP = 1.06;
+const GUARDIAN_SCALE = 4;
+
 export function enemyHp(district: number, wave: number): number {
-  const districtMult = Math.pow(9, district);
-  const boss = wave === WAVES_PER_DISTRICT ? 4 : 1;
-  return 32 * districtMult * Math.pow(1.15, wave - 1) * boss;
+  const boss = wave === WAVES_PER_DISTRICT ? GUARDIAN_SCALE : 1;
+  return 90 * Math.pow(CHAPTER_STEP, district) * Math.pow(WAVE_STEP, wave - 1) * boss;
 }
 
 export function enemyDamage(district: number, wave: number): number {
-  const districtMult = Math.pow(4.5, district);
-  return 6 * districtMult * Math.pow(1.13, wave - 1);
+  return 20 * Math.pow(CHAPTER_STEP, district) * Math.pow(WAVE_STEP, wave - 1);
 }
 
 export const enemyInterval = () => 1.6;
@@ -193,11 +214,16 @@ export function enemyCount(district: number, wave: number): number {
   return district >= 2 ? 3 : 2;
 }
 
+/**
+ * Butin d'une vague. Il suit **exactement** la pente de la difficulté (×1,9 par
+ * chapitre) : à ×2,4, une seule vague de chapitre 16 payait un niveau de
+ * laboratoire entier et l'essence perdait tout sens en fin de partie.
+ */
 export function waveReward(district: number, wave: number) {
-  const districtMult = Math.pow(7, district);
+  const districtMult = Math.pow(CHAPTER_STEP, district);
   const boss = wave === WAVES_PER_DISTRICT ? 10 : 1;
   return {
-    essence: 14 * districtMult * Math.pow(1.13, wave - 1) * boss,
+    essence: 25 * districtMult * Math.pow(1.08, wave - 1) * boss,
     /** Chaque ennemi tué lâche déjà 1 réactif garanti (voir `advanceCombat`) : ce bonus
      * de fin de vague ne sert plus qu'à faire du gardien un vrai coup de chance. */
     reagentChance: wave === WAVES_PER_DISTRICT ? 1 : 0,
