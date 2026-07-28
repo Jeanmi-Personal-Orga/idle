@@ -124,11 +124,13 @@ export function Arena({
   // Entre deux vagues, le héros continue jusqu'au bout de l'arène : c'est ce
   // déplacement qui raconte qu'on avance, plutôt qu'un décor qui défile.
   const heroAt = dead ? 0 : between ? gap : heroTravel;
-  const heroX = heroAt + (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
+  // Les à-coups de combat vivent sur leur propre couche : ils ne touchent plus à
+  // la position de marche.
+  const heroJolt = (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
   // Seuls les à-coups de combat restent dans `foeX` ; l'approche est animée.
   const foeX = -((foeStrike ? 7 : 0) - (foeHit ? 5 : 0));
-  // La marche est lente et régulière ; les à-coups de combat sont brefs et secs.
-  const heroMoving = heroWalking || (closed && !heroStrike && !heroHit);
+  // La marche est lente et régulière ; les à-coups de combat sont brefs et secs,
+  // et portés par une couche séparée.
   const foeMoving = foeWalking || (closed && !foeStrike && !foeHit);
 
   return (
@@ -160,20 +162,29 @@ export function Arena({
       )}
 
       <div className="fighter-slot hero" ref={heroRef}>
+        {/*
+          Deux couches, comme pour l'ennemi : `mover` porte la marche — longue et
+          linéaire —, `lunge` porte les à-coups de frappe et de recul, courts et
+          secs. Les mettre sur le même élément faisait qu'un coup réinterprétait
+          la transition de marche en cours : le héros traversait alors l'arène en
+          110 ms, ce qui donnait un dash vers l'ennemi.
+        */}
         <div
           className="mover"
           style={{
-            transform: `translateX(${heroX}px)`,
-            transitionDuration: heroMoving ? `${walkMs}ms` : '110ms',
-            transitionTimingFunction: heroMoving ? 'linear' : 'ease-out',
+            transform: `translateX(${heroAt}px)`,
+            transitionDuration: `${walkMs}ms`,
+            transitionTimingFunction: 'linear',
           }}
         >
-          <Sprite
-            character={hero}
-            anim={heroAnim(dead, c.reviving, heroWalking, heroStrike, heroHit)}
-            fallbackAnim={['idle']}
-            className={heroHit ? 'flash' : ''}
-          />
+          <div className="lunge" style={{ transform: `translateX(${heroJolt}px)` }}>
+            <Sprite
+              character={hero}
+              anim={heroAnim(dead, c.reviving, heroWalking, heroStrike, heroHit)}
+              fallbackAnim={['idle']}
+              className={heroHit ? 'flash' : ''}
+            />
+          </div>
           {heroHit && <span className="impact" aria-hidden="true" />}
           {/* Ce que le héros encaisse, en chiffres, au moment où il l'encaisse. */}
           <TakenHits scope={scope} />
