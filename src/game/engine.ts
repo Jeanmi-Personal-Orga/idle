@@ -211,6 +211,20 @@ export function refreshDaily(state: GameState) {
   if (state.mission) state.mission = null;
 }
 
+/**
+ * Achète des clés avec des sacs d'or. C'est le seul chemin de l'argent vers les
+ * ressources, et il reste indirect : une clé n'ouvre qu'une tentative, il faut
+ * encore remporter la mission.
+ */
+export function buyKeys(state: GameState, keys: number, gold: number): boolean {
+  if (state.resources.goldCoin < gold) return false;
+  refreshKeys(state);
+  state.resources.goldCoin -= gold;
+  state.keys.left += keys;
+  pushLog(state, `Comptoir : ${keys} clé${keys > 1 ? 's' : ''} pour ${gold} sacs d'or.`);
+  return true;
+}
+
 /** Vrai quand les trois missions du jour sont remportées. */
 export const allMissionsWon = (missions: DailyMission[]) =>
   missions.length > 0 && missions.every((m) => m.status === 'won');
@@ -223,7 +237,10 @@ export function startMission(state: GameState, missionId: string): boolean {
   refreshDaily(state);
   if (state.mission) return false;
   const mission = state.daily.missions.find((m) => m.id === missionId);
-  if (!mission || mission.status === 'won') return false;
+  // Une mission déjà remportée reste **rejouable** : elle repaie sa récompense,
+  // sans compter une seconde fois pour la prime. C'est ce qui donne un usage aux
+  // clés achetées au comptoir, une fois les trois du jour tombées.
+  if (!mission) return false;
   const campaign = campaignDef(mission.campaign);
   if (!campaign) return false;
   // Une clé par tentative. Elle n'est **rendue qu'en cas de défaite** : une
@@ -260,8 +277,10 @@ export function loseMission(state: GameState, reason: string) {
   if (run) {
     const mission = state.daily.missions.find((m) => m.id === run.missionId);
     if (mission && mission.status !== 'won') mission.status = 'lost';
-    // La clé revient : on ne perd une clé qu'en remportant une mission.
-    state.keys.left = Math.min(KEYS_PER_DAY, state.keys.left + 1);
+    // La clé revient : on ne perd une clé qu'en remportant une mission. Pas de
+    // plafond ici — on ne rend que ce qui a été dépensé, et un joueur peut
+    // détenir plus de clés que la dotation du jour s'il en a acheté.
+    state.keys.left += 1;
   }
   pushLog(state, reason);
 }

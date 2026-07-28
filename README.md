@@ -189,7 +189,24 @@ npm install
 npm run dev      # http://localhost:5173
 npm run build    # typecheck + bundle dans dist/
 npm run lint
+npm run smoke    # monte l'app dans un DOM sans navigateur et visite les 5 onglets
 ```
+
+### Le test de fumée, et pourquoi il existe
+
+`npm run smoke` monte l'application entière dans un DOM sans navigateur (jsdom),
+part d'une sauvegarde d'avant-dernière version — la migration est donc couverte —
+puis visite les cinq onglets, lance une mission et achète au comptoir. Il échoue
+si une exception de rendu survient ou si un écran reste vide.
+
+Il existe parce qu'un build vert ne dit rien du rendu : deux pannes d'écran noir
+de suite sont passées à travers `tsc`, `vite build` et `oxlint`. La première était
+une barre de vie qui lisait un ennemi disparu pendant le temps mort entre deux
+vagues ; la seconde une icône de monnaie sans définition, qui emportait tout
+l'onglet Campagnes. Les deux se voient ici en deux secondes.
+
+Ce qu'il ne fait pas : juger l'image. Les animations, les positions et le rendu
+des sprites ne se vérifient qu'à l'œil, dans un vrai navigateur.
 
 ### Docker — une image par cible
 

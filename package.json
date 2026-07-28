@@ -12,7 +12,8 @@
     "mobile:add:android": "npm run build && npx cap add android",
     "mobile:sync": "npm run build && npx cap sync",
     "mobile:ios": "npm run mobile:sync && npx cap open ios",
-    "mobile:android": "npm run mobile:sync && npx cap open android"
+    "mobile:android": "npm run mobile:sync && npx cap open android",
+    "smoke": "esbuild --bundle --format=esm --platform=browser --jsx=automatic --define:process.env.NODE_ENV='\"development\"' --define:import.meta.env='{\"DEV\":true}' --outfile=node_modules/.smoke-bundle.mjs scripts/smoke.tsx && node scripts/smoke-host.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
@@ -29,6 +30,8 @@
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "esbuild": "^0.27.2",
+    "jsdom": "^30.0.0"
   }
 }

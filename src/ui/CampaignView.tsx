@@ -22,7 +22,9 @@ import { ResIcon } from './ResIcon';
  *
  * L'économie des clés : une clé par tentative, **rendue en cas de défaite**. On
  * ne perd donc une clé qu'en remportant une mission, et rater n'a jamais fermé
- * la journée. Trois victoires par jour, et les trois ensemble paient une prime.
+ * la journée. Trois clés offertes par jour, et les trois missions ensemble paient
+ * une prime — une seule fois. Au-delà, une mission déjà remportée se rejoue pour
+ * sa récompense, ce qui donne un usage aux clés achetées au comptoir.
  */
 export function CampaignView() {
   const state = useGame();
@@ -41,15 +43,17 @@ export function CampaignView() {
           <div className="label">Missions du jour</div>
           <div className="right">
             <b>
-              🔑 {keys} / {KEYS_PER_DAY}
+              🔑 {keys}
+              {keys <= KEYS_PER_DAY && ` / ${KEYS_PER_DAY}`}
             </b>
-            <div className="muted small">clés du jour</div>
+            <div className="muted small">clés</div>
           </div>
         </div>
         <div className="muted small">
           Trois missions retirées au sort chaque jour. Une clé par tentative, rendue si
           tu tombes : seule une victoire consomme une clé. Tout est payé à la dernière
-          vague. Remise à zéro à minuit, heure de Paris.
+          vague. Trois clés offertes à minuit, heure de Paris — et une mission déjà
+          remportée se rejoue contre une clé.
         </div>
 
         {/* La prime des trois : le vrai objectif de la journée. */}
@@ -134,16 +138,14 @@ function MissionButton({
   busy: boolean;
   keys: number;
 }) {
-  if (mission.status === 'won') {
-    return (
-      <div className="row between mission-result won">
-        <b>Victoire</b>
-        <span className="muted small">Récompense touchée</span>
-      </div>
-    );
-  }
   return (
     <>
+      {mission.status === 'won' && (
+        <div className="row between mission-result won">
+          <b>Victoire</b>
+          <span className="muted small">Rejouable contre une clé</span>
+        </div>
+      )}
       {mission.status === 'lost' && (
         <div className="row between mission-result lost">
           <b>Défaite</b>
@@ -158,10 +160,12 @@ function MissionButton({
         {busy
           ? 'Une mission est en cours'
           : keys < 1
-            ? 'Plus de clé aujourd’hui'
+            ? 'Plus de clé — le comptoir en vend'
             : mission.status === 'lost'
               ? 'Retenter'
-              : 'Partir'}
+              : mission.status === 'won'
+                ? 'Rejouer'
+                : 'Partir'}
         {!busy && keys > 0 && <span className="muted small">🔑 1</span>}
       </button>
     </>

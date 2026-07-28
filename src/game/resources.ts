@@ -1,5 +1,5 @@
 /**
- * Les cinq ressources du jeu, avec un nom qui dit à quoi elles servent.
+ * Les six ressources du jeu, avec un nom qui dit à quoi elles servent.
  *
  * Les anciens noms — Essence, Réactifs, Lucidité, Éclats — étaient jolis mais
  * demandaient un glossaire : rien ne disait laquelle sert à quoi. Les
@@ -47,12 +47,28 @@ export const RESOURCES: ResourceDef[] = [
     use: 'Achète des legs permanents après une dissolution.',
   },
   {
+    id: 'catalyst',
+    name: 'Catalyseurs',
+    icon: '/sprites/ui/catalyst.png',
+    color: 'var(--catalyst)',
+    use: 'Termine sur-le-champ une fabrication ou des travaux.',
+  },
+  {
     id: 'goldCoin',
     name: "Pièces d'or",
     icon: '/sprites/ui/goldCoin.png',
     color: 'var(--gold-coin)',
-    use: 'Tombe au combat. Seule monnaie acceptée au comptoir.',
+    use: "Ne se gagne pas en jouant : elle s'achète, et paie le temps des chantiers.",
   },
 ];
 
-export const resourceDef = (id: ResourceId) => RESOURCES.find((r) => r.id === id)!;
+/**
+ * Définition d'une ressource. Le repli n'est pas décoratif : une monnaie sans
+ * entrée ici faisait planter tout l'écran qui l'affichait — c'est ce qui a cassé
+ * l'onglet Campagnes quand la prime a commencé à montrer des catalyseurs.
+ */
+export function resourceDef(id: ResourceId): ResourceDef {
+  const def = RESOURCES.find((r) => r.id === id);
+  if (def) return def;
+  return { id, name: id, icon: '/sprites/ui/catalyst.png', color: 'var(--fg)', use: '' };
+}

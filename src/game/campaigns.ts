@@ -64,7 +64,11 @@ export const CAMPAIGNS: Campaign[] = [
 
 export const campaignDef = (id: string) => CAMPAIGNS.find((c) => c.id === id);
 
-/** Nombre de clés offertes chaque jour — donc de missions à remporter. */
+/**
+ * Clés offertes chaque jour — donc de missions à remporter sans rien payer. On
+ * peut en détenir davantage : le comptoir en vend (voir `KEY_PACKS`), et une
+ * mission déjà remportée se rejoue pour sa récompense.
+ */
 export const KEYS_PER_DAY = 3;
 
 /**
