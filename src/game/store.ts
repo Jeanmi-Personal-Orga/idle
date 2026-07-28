@@ -39,8 +39,11 @@ export interface FloatingHit {
   dy: number;
 }
 
-/** Durée de vie d'un chiffre de dégâts, en millisecondes (§3 : montée + fondu). */
-const HIT_TTL = 700;
+/**
+ * Durée de vie d'un chiffre de dégâts, en millisecondes (§3 : montée + fondu).
+ * Assez long pour qu'on ait le temps de lire ce qu'on inflige et ce qu'on prend.
+ */
+const HIT_TTL = 1400;
 
 class GameStore {
   state: GameState;
@@ -74,6 +77,20 @@ class GameStore {
   };
 
   getSnapshot = () => this.revision;
+
+  /**
+   * L'arène signale si les boîtes de collision se touchent. Écriture directe
+   * sans notification : c'est mesuré dans une boucle d'animation, et le tick
+   * suivant du moteur le lira de toute façon — notifier ici ferait un rendu de
+   * plus par image.
+   */
+  setContact = (scope: FightScope, touching: boolean) => {
+    if (scope === 'mission') {
+      if (this.state.mission) this.state.mission.contact = touching;
+    } else {
+      this.state.combat.contact = touching;
+    }
+  };
 
   /** Applique une mutation puis notifie l'interface. */
   act = (fn: (state: GameState) => void) => {

@@ -38,6 +38,14 @@ import { Sprite } from './Sprite';
 /** Marge laissée entre deux corps au contact. */
 const CONTACT_GAP = 6;
 
+/**
+ * Les sprites sont dessinés dans une case bien plus large que la créature :
+ * on rétrécit donc chaque côté de cette fraction pour obtenir une boîte de
+ * collision qui colle au corps. Sans ça, deux personnages « se toucheraient »
+ * alors qu'un bon tiers de vide les sépare encore.
+ */
+const HITBOX_INSET = 0.3;
+
 
 export function Arena({
   fight,
@@ -91,6 +99,9 @@ export function Arena({
   const arenaRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const foeRef = useRef<HTMLDivElement>(null);
+  // Boîtes de collision réelles, mesurées à l'écran.
+  const heroBoxRef = useRef<HTMLDivElement>(null);
+  const foeBoxRef = useRef<HTMLDivElement>(null);
   const gap = useGap(arenaRef, heroRef, foeRef, [c.district, c.wave, hero, foe]);
 
   // Même vitesse de déplacement pour tout le monde. Une arme de mêlée envoie le
@@ -117,8 +128,6 @@ export function Arena({
   const closed = !dead;
   const walking = (c.closing ?? 0) > 0 && !dead;
 
-  const heroWalking = (walking && heroTravel > 0) || between;
-  const foeWalking = walking && foeTravel > 0;
 
   // Frappes : impulsion vers l'adversaire au moment du coup.
   const heroStrike = usePulse(store.heroSwings[scope], 220) && !dead;
@@ -141,6 +150,21 @@ export function Arena({
   // et se lève sur la scène remise à zéro. C'est lui qui autorise le
   // repositionnement instantané des deux camps.
   const resuming = useFalling(between, 500);
+  // Contact réel : c'est lui qui autorise les coups au corps à corps, côté
+  // moteur comme à l'écran. Il tombe à faux dès qu'une nouvelle vague se lève,
+  // et repasse à vrai à l'instant où les deux boîtes se touchent.
+  const touching = useContact(heroBoxRef, foeBoxRef, scope, {
+    active: !between && !dead && Boolean(front),
+    // Filet de sécurité : la marche accordée par le moteur est écoulée. Si les
+    // boîtes ne se rejoignent pas — mesure impossible, mise en page inattendue —
+    // on ne bloque pas le combat pour autant.
+    walkDone: (c.closing ?? 0) <= 0,
+  });
+  // On marche tant que les boîtes ne se touchent pas : l'animation de marche
+  // s'arrête donc à l'instant du contact, pas à la fin d'un chrono.
+  const heroWalking = (walking && !touching && heroTravel > 0) || between;
+  const foeWalking = walking && !touching && foeTravel > 0;
+
   // Les à-coups de combat vivent sur leur propre couche : ils ne touchent plus à
   // la position de marche.
   const heroJolt = (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
@@ -200,12 +224,19 @@ export function Arena({
           key={between ? 'exit' : `${c.district}-${c.wave}`}
           className={`mover ${heroAt > 0 ? 'approaching' : ''}`}
           style={{
+            // La sortie part d'où il se trouve, pas de sa marque : sinon on le
+            // voyait revenir à gauche d'un coup avant de repartir à droite.
+            ['--from' as string]: `${between ? heroTravel : 0}px`,
             ['--to' as string]: `${heroAt}px`,
             animationDuration: `${walkMs}ms`,
             transform: heroAt > 0 ? undefined : 'translateX(0)',
           }}
         >
-          <div className="lunge" style={{ transform: `translateX(${heroJolt}px)` }}>
+          <div
+            ref={heroBoxRef}
+            className="lunge"
+            style={{ transform: `translateX(${heroJolt}px)` }}
+          >
             <Sprite
               character={hero}
               anim={heroAnim(dead, c.reviving, heroWalking, heroStrike, heroHit)}
@@ -237,6 +268,7 @@ export function Arena({
           }}
         >
           <div
+            ref={foeBoxRef}
             className="lunge"
             style={{
               transform: `translateX(${foeX}px)`,
@@ -366,6 +398,60 @@ function usePulse(counter: number, ms: number): boolean {
   }, [counter, ms]);
 
   return on;
+}
+
+/** Boîte de collision d'un sprite : sa case, resserrée sur le corps. */
+function hitbox(el: HTMLElement): { left: number; right: number } {
+  const r = el.getBoundingClientRect();
+  const inset = r.width * HITBOX_INSET;
+  return { left: r.left + inset, right: r.right - inset };
+}
+
+/**
+ * Contact entre deux boîtes de collision, mesuré à chaque image. Tant qu'elles
+ * ne se chevauchent pas, le moteur n'autorise aucune attaque de mêlée : ce que
+ * l'on voit et ce que la simulation applique ne peuvent plus diverger.
+ *
+ * Le résultat est poussé dans le moteur (`store.setContact`) et rendu au
+ * composant. Au démontage on rend le contact : un combat ne doit pas se figer
+ * parce qu'on a changé d'onglet.
+ */
+function useContact(
+  a: React.RefObject<HTMLElement | null>,
+  b: React.RefObject<HTMLElement | null>,
+  scope: FightScope,
+  { active, walkDone }: { active: boolean; walkDone: boolean },
+): boolean {
+  const [touching, setTouching] = useState(false);
+  // Ces deux valeurs changent à chaque tick : on les lit dans la boucle par
+  // référence, sinon elle se relancerait dix fois par seconde.
+  const flags = useRef({ active, walkDone });
+  flags.current = { active, walkDone };
+
+  useEffect(() => {
+    let raf = 0;
+    let last: boolean | null = null;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const ea = a.current;
+      const eb = b.current;
+      let value: boolean;
+      if (!flags.current.active) value = false;
+      else if (!ea || !eb) value = true;
+      else value = hitbox(ea).right >= hitbox(eb).left || flags.current.walkDone;
+      if (value === last) return;
+      last = value;
+      store.setContact(scope, value);
+      setTouching(value);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      store.setContact(scope, true);
+    };
+  }, [a, b, scope]);
+
+  return touching;
 }
 
 /**

@@ -414,7 +414,7 @@ main {
  */
 @keyframes approach {
   from {
-    transform: translateX(0);
+    transform: translateX(var(--from, 0px));
   }
   to {
     transform: translateX(var(--to));

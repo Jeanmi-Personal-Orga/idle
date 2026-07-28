@@ -130,6 +130,15 @@ export interface CombatState {
    * temps le héros marche vers la sortie et la vague suivante s'annonce.
    */
   interlude: number;
+  /**
+   * Vrai quand les boîtes de collision des deux camps se touchent réellement à
+   * l'écran (mesuré par l'arène, voir `store.setContact`). Tant qu'elles ne se
+   * touchent pas, seules les attaques à distance partent.
+   *
+   * Absent — hors-ligne, ou simulation sans DOM — vaut « au contact » : la
+   * progression ne dépend pas de l'affichage.
+   */
+  contact?: boolean;
 }
 
 /**
@@ -157,6 +166,8 @@ export interface MissionRun {
   hero: Hero;
   enemies: Enemy[];
   closing: number;
+  /** Voir `CombatState.contact`. */
+  contact?: boolean;
   /** Secondes de relève après une chute ; une chute annule la mission. */
   reviving: number;
 }
