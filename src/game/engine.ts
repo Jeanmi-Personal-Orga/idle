@@ -21,6 +21,7 @@ import {
   waveReward,
 } from './formulas';
 import { ascMods, canAscend, shardGain } from './ascension';
+import { LAB_MAX } from './lab';
 import { mods as allMods } from './modifiers';
 import { NEUTRAL_MODS, advanceResearch, insightReward } from './tech';
 import {
@@ -928,6 +929,10 @@ export function chooseCharacter(state: GameState, id: CharacterId) {
 
 export function upgradeLab(state: GameState): boolean {
   if (state.labUpgrading) return false;
+  // Le niveau 40 est le dernier : au-delà, la table n'a plus de ligne, et le
+  // plafond est ce qui déclenche la dissolution. Sans ce garde-fou, on payait le
+  // coût du 40 en boucle pour monter dans le vide.
+  if (state.labLevel >= LAB_MAX) return false;
   const cost = labUpgradeCost(state.labLevel, state.ascension.count);
   if (state.resources.essence < cost.essence) return false;
   state.resources.essence -= cost.essence;
@@ -945,7 +950,7 @@ function advanceLabUpgrade(state: GameState, dt: number) {
 
 function completeLabUpgrade(state: GameState) {
   if (!state.labUpgrading) return;
-  state.labLevel += 1;
+  state.labLevel = Math.min(LAB_MAX, state.labLevel + 1);
   state.labUpgrading = null;
   pushLog(state, `Laboratoire porté au niveau ${state.labLevel}.`);
 }

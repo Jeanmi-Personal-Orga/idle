@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
 import {
   districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
-import { CONTACT_SLOTS, WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
+import { WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
 import type { Enemy, Hero } from '../game/types';
@@ -48,26 +48,6 @@ const CONTACT_GAP = 4;
 
 /** Écart entre deux rangs de la file : assez serré pour que la vague reste groupée. */
 const FILE_SPACING = 30;
-
-/**
- * Décalage entre deux ennemis qui se battent côte à côte. Petit : ils tapent tous
- * les deux le héros, donc ils doivent tenir dans la même zone de contact.
- */
-const SIDE_BY_SIDE = 12;
-
-/**
- * Distance à couvrir pour un rang donné. Les rangs qui ont une place au contact
- * viennent au corps du héros, côte à côte ; les autres s'arrêtent en file derrière
- * eux. Le résultat ne dépend que du rang, donc une mort ne déplace personne.
- */
-function travelForRank(rank: number, gap: number): number {
-  const start = rank * FILE_SPACING;
-  const target =
-    rank < CONTACT_SLOTS
-      ? rank * SIDE_BY_SIDE
-      : CONTACT_SLOTS * SIDE_BY_SIDE + (rank - CONTACT_SLOTS + 1) * FILE_SPACING;
-  return Math.max(0, start + gap - target);
-}
 
 
 export function Arena({
@@ -127,12 +107,12 @@ export function Arena({
   const dead = c.reviving > 0;
 
   const arenaRef = useRef<HTMLDivElement>(null);
-  const heroRef = useRef<HTMLDivElement>(null);
-  const foeRef = useRef<HTMLDivElement>(null);
   // Boîtes de collision réelles, mesurées à l'écran.
   const heroBoxRef = useRef<HTMLDivElement>(null);
   const foeBoxRef = useRef<HTMLDivElement>(null);
-  const gap = useGap(arenaRef, heroRef, foeRef, [c.district, c.wave, hero, foe]);
+  // On mesure les **sprites** eux-mêmes, pas leurs emplacements : ceux des
+  // ennemis n'ont aucune largeur (leurs rangs sont en position absolue).
+  const gap = useGap(arenaRef, heroBoxRef, foeBoxRef, [c.district, c.wave, hero, foe]);
 
   // Même vitesse de déplacement pour tout le monde. Une arme de mêlée envoie le
   // héros à sa marque, à mi-distance, et il y reste : les vagues suivantes
@@ -228,7 +208,7 @@ export function Arena({
         </span>
       </div>
 
-      <div className="fighter-slot hero" ref={heroRef}>
+      <div className="fighter-slot hero">
         {/*
           Deux couches, comme pour l'ennemi : `mover` porte la marche — longue et
           linéaire —, `lunge` porte les à-coups de frappe et de recul, courts et
@@ -272,7 +252,7 @@ export function Arena({
         celui de devant tombe, les autres **ne bougent pas** — ils restent où ils
         sont et frappent de là, dès que le moteur leur donne une place au contact.
       */}
-      <div className={`fighter-slot foe ${between || !front ? 'gone' : ''}`} ref={foeRef}>
+      <div className={`fighter-slot foe ${between || !front ? 'gone' : ''}`}>
         {c.enemies.map((enemy, index) =>
           enemy.hp <= 0 ? null : (
             <FoeUnit
@@ -285,11 +265,12 @@ export function Arena({
               hero={hero}
               cycled={cycleOf(c.district) > 0}
               guardian={guardian && c.enemies.length === 1}
-              // Chacun couvre la distance de son rang : les deux premiers viennent
-              // au contact côte à côte, les suivants s'arrêtent derrière.
+              // Tout le monde couvre la même distance : la file garde sa
+              // formation, le premier rang arrive au contact et les autres
+              // restent derrière, à un rang d'écart.
               travel={
                 spriteStyle(enemy.sprite === 'self' ? hero : enemy.sprite) === 'melee'
-                  ? travelForRank(index, foeTravel)
+                  ? foeTravel
                   : 0
               }
               rank={index}
@@ -505,13 +486,30 @@ function useFalling(flag: boolean, ms: number): boolean {
 }
 
 /**
+ * Abscisse de mise en page d'un élément dans un ancêtre, en remontant la chaîne
+ * des `offsetParent`. On additionne des `offsetLeft`, qui **ignorent les
+ * transforms** : la mesure ne dépend donc pas des déplacements en cours.
+ *
+ * C'est indispensable ici : les rangs ennemis sont positionnés en absolu dans un
+ * emplacement de largeur nulle, donc mesurer l'emplacement plutôt que le sprite
+ * donnait un écart faux d'une largeur de sprite entière — les combattants se
+ * marchaient dessus.
+ */
+function layoutLeft(el: HTMLElement, ancestor: HTMLElement | null): number {
+  let x = 0;
+  let node: HTMLElement | null = el;
+  while (node && node !== ancestor) {
+    x += node.offsetLeft;
+    node = node.offsetParent as HTMLElement | null;
+  }
+  return x;
+}
+
+/**
  * Distance qu'il reste à couvrir pour amener les deux rectangles côte à côte.
  * C'est le même calcul que `withinReach`, appliqué aux positions de repos : la
  * marche s'arrête donc exactement là où les coups deviennent possibles, sans
  * jamais dépasser.
- *
- * On mesure en coordonnées de mise en page (`offsetLeft` / `offsetWidth`), pas en
- * rectangles à l'écran : ceux-là portent déjà les déplacements en cours.
  */
 function useGap(
   arena: React.RefObject<HTMLDivElement | null>,
@@ -525,10 +523,12 @@ function useGap(
     const measure = () => {
       const ea = a.current;
       const eb = b.current;
-      if (!ea || !eb) return;
-      // Rectangles bruts : bord droit du héros contre bord gauche de l'ennemi.
-      const heroRight = ea.offsetLeft + ea.offsetWidth;
-      setGap(Math.max(0, eb.offsetLeft - heroRight - CONTACT_GAP));
+      const scene = arena.current;
+      if (!ea || !eb || !scene) return;
+      // Bord droit du sprite du héros contre bord gauche du sprite de l'ennemi.
+      const heroRight = layoutLeft(ea, scene) + ea.offsetWidth;
+      const foeLeft = layoutLeft(eb, scene);
+      setGap(Math.max(0, foeLeft - heroRight - CONTACT_GAP));
     };
     measure();
     const el = arena.current;

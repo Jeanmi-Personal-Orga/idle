@@ -22,6 +22,7 @@ import {
   upgradeLab,
 } from "../game/engine";
 import {
+  LAB_MAX,
   distillCost,
   skipCost,
   powerScore,
@@ -179,7 +180,9 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
             <span className="muted small">
               {state.labUpgrading
                 ? formatDuration(state.labUpgrading.remaining)
-                : `niveau ${state.labLevel + 1}`}
+                : state.labLevel >= LAB_MAX
+                  ? 'niveau maximum'
+                  : `niveau ${state.labLevel + 1}`}
             </span>
           </span>
         </button>
@@ -197,7 +200,9 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
               <button className="ghost" onClick={() => setShowUpgrade(false)}>✕</button>
             </div>
             <div className="muted small">
-              Niveau {state.labLevel} → {state.labLevel + 1}
+              {state.labLevel >= LAB_MAX
+                ? `Niveau ${LAB_MAX} : le laboratoire est au bout de ce qu'il peut devenir. La suite passe par une dissolution.`
+                : `Niveau ${state.labLevel} → ${state.labLevel + 1}`}
             </div>
             <div className="grid2">
               <div className="statline">
@@ -237,13 +242,13 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
               </div>
             ) : (
               <button
-                disabled={state.resources.essence < labCost.essence}
+                disabled={state.labLevel >= LAB_MAX || state.resources.essence < labCost.essence}
                 onClick={() => {
                   store.act(upgradeLab);
                   setShowUpgrade(false);
                 }}
               >
-                Confirmer
+                {state.labLevel >= LAB_MAX ? 'Niveau maximum' : 'Confirmer'}
               </button>
             )}
           </div>
