@@ -1,7 +1,8 @@
 /**
- * Le comptoir : des sacs d'or en argent réel, et des clés de mission payées en
- * sacs d'or. L'argent réel n'achète donc jamais de ressource directement — il
- * achète du temps et des tentatives, que le joueur transforme lui-même en butin.
+ * Le comptoir : deux rayons, tous deux en argent réel — des **sacs d'or**, qui
+ * paient le temps des chantiers, et des **clés de mission**, qui ouvrent des
+ * tentatives. Aucun des deux ne vend de ressource : une clé n'est qu'un droit
+ * d'entrée, il faut encore remporter la mission pour être payé.
  *
  * Les prix sont indicatifs et non branchés : encaisser demande un prestataire de
  * paiement et une vérification des reçus côté serveur (voir `ShopView`).
@@ -22,20 +23,20 @@ export const GOLD_PACKS: GoldPack[] = [
 ];
 
 /**
- * Lots de clés de mission, payés en sacs d'or. Une clé mène à une mission, donc
- * aux trois essences : c'est la façon d'acheter des ressources sans jamais les
- * vendre directement, et sans court-circuiter le combat — il faut encore gagner.
+ * Lots de clés de mission, vendus en **argent réel** comme les sacs d'or. Une clé
+ * mène à une mission, donc aux trois essences — mais il faut la remporter : on
+ * n'achète pas de ressource, on achète une tentative.
  *
- * Prix croissant par lot dégressif : acheter en gros coûte moins par clé.
+ * Dégressif : plus le lot est gros, moins la clé coûte.
  */
 export interface KeyPack {
   id: string;
   keys: number;
-  gold: number;
+  price: string;
 }
 
 export const KEY_PACKS: KeyPack[] = [
-  { id: 'cle', keys: 1, gold: 40 },
-  { id: 'trousseau', keys: 3, gold: 105 },
-  { id: 'anneau', keys: 10, gold: 300 },
+  { id: 'cle', keys: 1, price: '0,99 €' },
+  { id: 'trousseau', keys: 5, price: '3,99 €' },
+  { id: 'anneau', keys: 15, price: '9,99 €' },
 ];

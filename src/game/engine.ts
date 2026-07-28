@@ -212,17 +212,15 @@ export function refreshDaily(state: GameState) {
 }
 
 /**
- * Achète des clés avec des sacs d'or. C'est le seul chemin de l'argent vers les
- * ressources, et il reste indirect : une clé n'ouvre qu'une tentative, il faut
- * encore remporter la mission.
+ * Crédite des clés achetées au comptoir. L'achat se fait en argent réel, donc
+ * l'appel doit **suivre** une transaction validée : ici, rien n'est vérifié — le
+ * comptoir est en mode test (voir `ShopView`). Le chemin vers les ressources
+ * reste indirect : une clé n'ouvre qu'une tentative, il faut gagner.
  */
-export function buyKeys(state: GameState, keys: number, gold: number): boolean {
-  if (state.resources.goldCoin < gold) return false;
+export function grantKeys(state: GameState, keys: number) {
   refreshKeys(state);
-  state.resources.goldCoin -= gold;
   state.keys.left += keys;
-  pushLog(state, `Comptoir : ${keys} clé${keys > 1 ? 's' : ''} pour ${gold} sacs d'or.`);
-  return true;
+  pushLog(state, `Comptoir : +${keys} clé${keys > 1 ? 's' : ''} de mission.`);
 }
 
 /** Vrai quand les trois missions du jour sont remportées. */

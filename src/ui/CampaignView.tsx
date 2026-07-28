@@ -24,7 +24,8 @@ import { ResIcon } from './ResIcon';
  * ne perd donc une clé qu'en remportant une mission, et rater n'a jamais fermé
  * la journée. Trois clés offertes par jour, et les trois missions ensemble paient
  * une prime — une seule fois. Au-delà, une mission déjà remportée se rejoue pour
- * sa récompense, ce qui donne un usage aux clés achetées au comptoir.
+ * sa récompense, ce qui donne un usage aux clés achetées au comptoir (en argent
+ * réel, comme les sacs d'or).
  */
 export function CampaignView() {
   const state = useGame();

@@ -1,4 +1,4 @@
-import { buyKeys, formatNum, pushLog } from '../game/engine';
+import { formatNum, grantKeys, pushLog } from '../game/engine';
 import { GOLD_PACKS, KEY_PACKS } from '../game/shop';
 import { store, useGame } from '../game/store';
 import { ResIcon } from './ResIcon';
@@ -6,12 +6,12 @@ import { ResIcon } from './ResIcon';
 /**
  * Le comptoir, à deux étages :
  *
- * - les **sacs d'or** s'achètent en argent réel — la seule monnaie payante ;
- * - les sacs d'or achètent des **clés de mission**, et le temps des longs
- *   chantiers depuis l'écran concerné.
+ * - les **sacs d'or**, qui paient le temps des longs chantiers depuis l'écran
+ *   concerné ;
+ * - les **clés de mission**, qui ouvrent des tentatives.
  *
- * L'argent réel n'achète donc jamais de ressource directement : une clé n'ouvre
- * qu'une tentative, et il faut encore remporter la mission pour être payé.
+ * Les deux s'achètent en argent réel. Ni l'un ni l'autre ne vend de ressource :
+ * une clé n'est qu'un droit d'entrée, il faut encore remporter la mission.
  *
  * ⚠ **Mode test** : cliquer sur un prix crédite l'or immédiatement, sans
  * paiement. C'est là uniquement pour équilibrer et essayer le jeu. Avant toute
@@ -21,7 +21,6 @@ import { ResIcon } from './ResIcon';
  */
 export function ShopView() {
   const state = useGame();
-  const gold = state.resources.goldCoin;
 
   return (
     <div className="view">
@@ -69,27 +68,27 @@ export function ShopView() {
         </div>
         <div className="muted small">
           Une clé ouvre une tentative de mission — et une mission déjà remportée se
-          rejoue pour sa récompense. C'est ainsi qu'on achète des ressources : en
-          allant les chercher.
+          rejoue pour sa récompense. On n'achète pas les ressources : on achète le
+          droit d'aller les chercher.
         </div>
         {KEY_PACKS.map((pack) => (
           <div className="row between" key={pack.id}>
             <div>
               <b>🔑 {pack.keys}</b>
-              <span className="muted small">
-                {' '}
-                soit {Math.round(pack.gold / pack.keys)} par clé
-              </span>
+              {pack.keys > 1 && <span className="muted small"> lot</span>}
             </div>
             <button
               className="ascend"
-              disabled={gold < pack.gold}
-              onClick={() => store.act((st) => buyKeys(st, pack.keys, pack.gold))}
+              title="Mode test : crédite les clés sans paiement"
+              onClick={() => store.act((st) => grantKeys(st, pack.keys))}
             >
-              <ResIcon id="goldCoin" size={13} /> {formatNum(pack.gold)}
+              {pack.price}
             </button>
           </div>
         ))}
+        <div className="muted small">
+          Mode test également : les clés sont créditées sans paiement.
+        </div>
       </div>
     </div>
   );
