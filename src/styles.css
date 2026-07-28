@@ -1608,3 +1608,59 @@ nav .icon {
   justify-content: center;
   padding: 4px 0 2px;
 }
+
+/* --- Annonce du chapitre et de la vague, sur la scène de combat --- */
+
+.wave-banner {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  font-size: 11px;
+  color: var(--muted);
+  transition:
+    transform 0.4s ease-out,
+    font-size 0.4s ease-out,
+    color 0.4s ease-out;
+}
+
+.wave-banner b {
+  font-size: 13px;
+  color: #cfd9e4;
+}
+
+/*
+ * Pendant le temps mort, l'annonce prend toute la place et se centre : c'est le
+ * moment où le joueur a besoin de savoir où il en est.
+ */
+.wave-banner.announce {
+  top: 50%;
+  transform: translateY(-50%) scale(1.35);
+  color: var(--fg);
+}
+
+.wave-banner.announce b {
+  color: var(--essence);
+}
+
+/* L'ennemi disparaît proprement entre deux vagues. */
+.fighter-slot.foe.gone {
+  opacity: 0;
+  transition: opacity 0.25s ease-out;
+}
+
+/* Puissance totale, à côté du compte : le seul chiffre de résumé de l'en-tête. */
+.power-badge {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--catalyst);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

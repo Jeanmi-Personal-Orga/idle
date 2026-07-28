@@ -125,6 +125,11 @@ export interface CombatState {
    * l'arène.
    */
   closing: number;
+  /**
+   * Secondes restantes du temps mort qui suit une vague nettoyée. Pendant ce
+   * temps le héros marche vers la sortie et la vague suivante s'annonce.
+   */
+  interlude: number;
 }
 
 /**

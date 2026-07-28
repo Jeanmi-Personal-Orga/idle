@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
-import { WAVES_PER_DISTRICT, cycleOf } from '../game/content';
-import { closingTime, formatNum } from '../game/engine';
+import {
+  districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
+import { WAVE_PAUSE, closingTime, formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
 import type { Enemy, Hero } from '../game/types';
@@ -52,7 +53,11 @@ export function Arena({
     reviving: fight?.reviving ?? chapter.reviving,
     district: district ?? chapter.district,
     wave: chapter.wave,
+    // Une mission n'a pas de temps mort : ses vagues s'enchaînent.
+    interlude: fight ? 0 : (chapter.interlude ?? 0),
   };
+  /** Entre deux vagues : le héros marche vers la sortie, personne ne se bat. */
+  const between = c.interlude > 0;
 
   const hero = state.character ?? DEFAULT_CHARACTER;
   // Un mort quitte la scène : la cible affichée est le **premier ennemi encore
@@ -60,7 +65,7 @@ export function Arena({
   // Ceux qui restent derrière avancent d'un rang à chaque mort.
   const frontIndex = Math.max(0, c.enemies.findIndex((e) => e.hp > 0));
   const front = c.enemies[frontIndex] ?? c.enemies[0];
-  const sprite = front.sprite;
+  const sprite = front?.sprite ?? 'champignon';
   // « Écho de soi » du Puits Prismatique : l'ennemi est le sprite du joueur.
   const foe = sprite === 'self' ? hero : sprite;
   const extras = c.enemies.slice(frontIndex + 1).filter((e) => e.hp > 0);
@@ -96,14 +101,14 @@ export function Arena({
   const foeTravel = foeStyle === 'melee' ? gap - gap * heroShare : 0;
   // La marche dure exactement l'approche accordée par le moteur, et se joue
   // pendant son décompte : à l'arrivée, les coups partent.
-  const walkMs = Math.max(120, closingTime(state) * 1000);
+  const walkMs = between ? WAVE_PAUSE * 1000 : Math.max(120, closingTime(state) * 1000);
 
   // L'ennemi marche pendant tout le décompte du moteur : `closed` sert de cible
   // de déplacement, pas de signal d'arrivée — il vaut donc vrai dès le départ.
   const closed = !dead;
   const walking = (c.closing ?? 0) > 0 && !dead;
 
-  const heroWalking = walking && heroTravel > 0;
+  const heroWalking = (walking && heroTravel > 0) || between;
   const foeWalking = walking && foeTravel > 0;
 
   // Frappes : impulsion vers l'adversaire au moment du coup.
@@ -116,9 +121,9 @@ export function Arena({
   const foeHit = usePulse(lastHitOnMain?.id ?? 0, 150);
   const heroHit = usePulse(store.foeSwings[scope], 170) && !dead;
 
-  // Le héros gagne sa marque et l'occupe : plus de retour au point de départ
-  // entre deux vagues, donc plus de saut.
-  const heroAt = dead ? 0 : heroTravel;
+  // Entre deux vagues, le héros continue jusqu'au bout de l'arène : c'est ce
+  // déplacement qui raconte qu'on avance, plutôt qu'un décor qui défile.
+  const heroAt = dead ? 0 : between ? gap : heroTravel;
   const heroX = heroAt + (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
   // Seuls les à-coups de combat restent dans `foeX` ; l'approche est animée.
   const foeX = -((foeStrike ? 7 : 0) - (foeHit ? 5 : 0));
@@ -141,6 +146,19 @@ export function Arena({
         />
       ))}
 
+      {/* Chapitre et vague s'affichent sur la scène, pas dans une barre au-dessus :
+          c'est là que le joueur regarde. L'annonce se lit en grand pendant le
+          temps mort, et reste discrète pendant le combat. */}
+      {!fight && (
+        <div className={`wave-banner ${between ? 'announce' : ''}`} aria-live="polite">
+          <b>{districtLabel(c.district)}</b>
+          <span>
+            Vague {c.wave} / {WAVES_PER_DISTRICT}
+            {c.wave === WAVES_PER_DISTRICT && ' · gardien'}
+          </span>
+        </div>
+      )}
+
       <div className="fighter-slot hero" ref={heroRef}>
         <div
           className="mover"
@@ -162,7 +180,7 @@ export function Arena({
         </div>
       </div>
 
-      <div className="fighter-slot foe" ref={foeRef}>
+      <div className={`fighter-slot foe ${between || !front ? 'gone' : ''}`} ref={foeRef}>
         {/*
           La boîte de déplacement est recréée à chaque vague (`key`) : l'animation
           d'approche repart donc de l'entrée de l'arène. Une simple transition

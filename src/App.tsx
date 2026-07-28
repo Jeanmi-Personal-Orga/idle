@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { formatNum } from './game/engine';
+import { heroStats, powerScore } from './game/formulas';
 import { RESOURCES, type ResourceId } from './game/resources';
 import { ResourceTicker } from './ui/ResourceTicker';
 import { useGame, useGameLoop } from './game/store';
@@ -82,6 +84,11 @@ export default function App() {
       <header>
         <div className="header-top">
           <div className="title">L'Alchimiste de Brume</div>
+          {/* La puissance totale se lit à côté du compte : c'est le résumé de
+              tout ce qu'on possède, pas une donnée de combat. */}
+          <div className="power-badge" title="Puissance totale">
+            ★ {formatNum(powerScore(heroStats(state)))}
+          </div>
           {session ? (
             <div className="muted small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {session.user.username}

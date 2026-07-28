@@ -307,6 +307,11 @@ export function migrate(save: GameState): GameState | null {
     save.mission = null;
     save.version = 14;
   }
+  if (save.version === 14) {
+    // v15 : temps mort entre les vagues.
+    save.combat.interlude = 0;
+    save.version = 15;
+  }
   return save.version === SAVE_VERSION ? save : null;
 }
 

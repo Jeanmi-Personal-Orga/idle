@@ -34,14 +34,22 @@ import { spriteStyle } from './characters';
 import type { CharacterId } from './characters';
 import type { Enemy, GameState, Item, SlotId } from './types';
 
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
+
+/**
+ * Temps mort entre deux vagues, en secondes. Il sert à raconter : le héros
+ * marche jusqu'au bout à droite, la vague suivante s'annonce à l'écran, puis
+ * l'ennemi entre. Sans lui, une vague nettoyée était remplacée dans la même
+ * image et on ne comprenait pas ce qui venait de se passer.
+ */
+export const WAVE_PAUSE = 2.2;
 
 /**
  * Temps qu'il faut pour traverser toute l'arène, en secondes. Les deux camps
  * marchent à la **même vitesse** : celui qui doit couvrir la moitié du chemin
  * met donc deux fois moins de temps.
  */
-export const CLOSING_TIME = 1.4;
+export const CLOSING_TIME = 3.2;
 
 /** Vrai si l'arme équipée frappe sans avoir besoin d'approcher. */
 export const heroIsRanged = (state: GameState) => Boolean(state.equipped.arme?.ranged);
@@ -131,9 +139,18 @@ export function makeCampaignEnemies(
   return [buildEnemy(campaignDepth(campaign, deepest), wave, damageMult, scale, name, sprite)];
 }
 
-/** Date locale, au format court : sert de repère pour la recharge des clés. */
+/**
+ * Date du jour **à Paris**, au format court. Les clés se rechargent à minuit
+ * heure de Paris pour tout le monde : sans fuseau fixe, un joueur pouvait changer
+ * l'heure de son appareil, ou en gagner une de plus en voyageant.
+ */
 export function today(): string {
-  return new Date().toLocaleDateString('fr-CA');
+  return new Intl.DateTimeFormat('fr-CA', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 /**
@@ -208,6 +225,7 @@ export function newGame(): GameState {
       enemies: makeEnemies(0, 1),
       reviving: 0,
       closing: CLOSING_TIME / 2,
+      interlude: 0,
     },
     lastSeen: Date.now(),
     essenceRate: 0,
@@ -295,10 +313,22 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
     return;
   }
 
-  // Garde-fou : ne devrait jamais arriver, mais un tableau vide bloquerait
-  // le héros pour toujours plutôt que de planter.
+  // Temps mort entre deux vagues : rien ne se bat, le héros marche et la vague
+  // suivante s'annonce.
+  if ((c.interlude ?? 0) > 0) {
+    c.interlude = Math.max(0, (c.interlude ?? 0) - dt);
+    c.hero.hp = Math.min(s.health, c.hero.hp + ((s.health * s.condensation) / 100) * dt);
+    if (c.interlude > 0) return;
+    c.enemies = makeEnemies(c.district, c.wave, mods.enemyDamageMult);
+    c.closing = closingTime(state);
+    return;
+  }
+
+  // Garde-fou : un tableau vide hors temps mort bloquerait le héros pour
+  // toujours plutôt que de planter.
   if (c.enemies.length === 0) {
-    c.enemies = makeEnemies(c.district, c.wave, allMods(state).enemyDamageMult);
+    c.enemies = makeEnemies(c.district, c.wave, mods.enemyDamageMult);
+    c.closing = closingTime(state);
   }
 
   c.hero.hp = Math.min(s.health, c.hero.hp + (s.health * s.condensation) / 100 * dt);
@@ -409,10 +439,11 @@ function onWaveCleared(state: GameState, rng: () => number) {
   } else {
     c.wave += 1;
   }
-  c.enemies = makeEnemies(c.district, c.wave, mods.enemyDamageMult);
+  // On n'invoque pas la vague suivante tout de suite : le temps mort laisse le
+  // héros rejoindre le bout de l'arène et la vague s'annoncer.
+  c.interlude = WAVE_PAUSE;
+  c.enemies = [];
   c.hero.cooldown = 0;
-  // La vague suivante commence par la marche, pas par un coup.
-  c.closing = closingTime(state);
 }
 
 /**

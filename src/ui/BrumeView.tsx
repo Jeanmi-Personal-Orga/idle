@@ -5,8 +5,6 @@ import {
   PURITIES,
   SLOTS,
   STATS,
-  WAVES_PER_DISTRICT,
-  districtLabel,
   nextMissionWave,
   purity,
 } from "../game/content";
@@ -62,36 +60,12 @@ export function BrumeView() {
   const c = state.combat;
   const s = heroStats(state);
   const dead = c.reviving > 0;
-  const [showMissions, setShowMissions] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
 
   return (
     <div className="view">
       {/* La scène s'assombrit quand la lanterne tombe (§2). */}
       <div className={`card scene ${dead ? "lantern-out" : ""}`}>
-        <div className="row between">
-          <div>
-            <div className="label">{districtLabel(c.district)}</div>
-            <div className="muted small">
-              Vague {c.wave} / {WAVES_PER_DISTRICT}
-              {c.wave === WAVES_PER_DISTRICT && " · gardien"}
-              {c.enemies.length > 1 && ` · ${c.enemies.length} ennemis`}
-            </div>
-          </div>
-          <div className="right">
-            <div className="row">
-              <button className="ghost" title="Mission" onClick={() => setShowMissions(true)}>
-                🎯
-                {/* Pastille : une récompense attend d'être réclamée. */}
-                {state.pendingContract && <em className="badge dot" />}
-              </button>
-            </div>
-            {/* Une seule mesure lisible, à la place du détail technique. */}
-            <div className="label">{formatNum(powerScore(s))}</div>
-            <div className="muted small">puissance</div>
-          </div>
-        </div>
-
         {/* Une seule scène : les deux combattants s'y déplacent vraiment. */}
         <Arena />
 
@@ -131,9 +105,6 @@ export function BrumeView() {
         </div>
       </div>
 
-      {showMissions && (
-        <MissionPopup best={c.best} onClose={() => setShowMissions(false)} />
-      )}
       {logOpen && <LogPopup log={state.log} onClose={() => setLogOpen(false)} />}
     </div>
   );
@@ -633,8 +604,11 @@ function InfoPopup({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Popup « 🎯 » : la vague de contrat à venir dans ce chapitre, et sa récompense. */
-function MissionPopup({ best, onClose }: { best: number; onClose: () => void }) {
+/**
+ * Contrat du chapitre : la vague à nettoyer et sa récompense. Vit dans l'onglet
+ * Campagnes, avec les missions — c'est le même genre d'objectif.
+ */
+export function MissionPopup({ best, onClose }: { best: number; onClose: () => void }) {
   const state = useGame();
   const target = nextMissionWave(best);
   const progress = target ? Math.min(1, best / target) : 1;

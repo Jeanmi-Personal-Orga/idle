@@ -7,7 +7,9 @@ import {
 } from '../game/campaigns';
 import { formatNum, leaveCampaign, startCampaign } from '../game/engine';
 import { heroStats, powerScore, recommendedPower } from '../game/formulas';
+import { useState } from 'react';
 import { store, useGame } from '../game/store';
+import { MissionPopup } from './BrumeView';
 import { Arena, FighterBar } from './Arena';
 import { ResIcon } from './ResIcon';
 
@@ -26,6 +28,7 @@ import { ResIcon } from './ResIcon';
  */
 export function CampaignView() {
   const state = useGame();
+  const [showContract, setShowContract] = useState(false);
   const active = state.mission;
   const power = powerScore(heroStats(state));
   const keys = state.keys?.left ?? 0;
@@ -44,9 +47,19 @@ export function CampaignView() {
         </div>
         <div className="muted small">
           Une clé par tentative. Tout est payé à la dernière vague : tomber en route
-          ne rapporte rien. Ta puissance : {formatNum(power)}.
+          ne rapporte rien. Les clés reviennent à minuit, heure de Paris.
         </div>
+        {/* Le contrat du chapitre vit ici, avec les missions : c'est le même
+            genre d'objectif, et il n'avait rien à faire au-dessus du combat. */}
+        <button className="ghost" onClick={() => setShowContract(true)}>
+          🎯 Contrat du chapitre
+          {state.pendingContract && <em className="badge dot" />}
+        </button>
       </div>
+
+      {showContract && (
+        <MissionPopup best={state.combat.best} onClose={() => setShowContract(false)} />
+      )}
 
       {CAMPAIGNS.map((campaign) => {
         const running = active?.id === campaign.id;
