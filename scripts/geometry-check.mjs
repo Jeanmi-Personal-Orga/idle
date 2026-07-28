@@ -9,7 +9,15 @@
  *
  * Usage : `npm run geometry`
  */
-import { CONTACT_GAP, EDGE, arenaLayout, fileSpacing } from '../node_modules/.geometry.mjs';
+import {
+  CONTACT_GAP,
+  EDGE,
+  FOE_BOX,
+  HERO_BOX,
+  arenaLayout,
+  boxInset,
+  fileSpacing,
+} from '../node_modules/.geometry.mjs';
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -19,12 +27,12 @@ function check(label, actual, expected) {
     (ok ? '' : ` (attendu ${expected})`));
 }
 
-/** Positions d'arrivée, une fois les marches jouées. */
+/** Bords des boîtes de collision à l'arrivée, une fois les marches jouées. */
 function arrival(arenaWidth, heroWidth, foeWidth, heroShare) {
   const l = arenaLayout(arenaWidth, heroWidth, foeWidth, heroShare);
   return {
-    heroRight: l.heroLeft + heroWidth + l.heroTravel,
-    foeLeft: l.foeLeft - l.foeTravel,
+    heroRight: l.heroLeft + heroWidth - l.heroInset + l.heroTravel,
+    foeLeft: l.foeLeft + l.foeInset - l.foeTravel,
     layout: l,
   };
 }
@@ -39,7 +47,7 @@ const CASES = [
   ['scène très étroite', 200, 96, 96, 0.5],
 ];
 
-console.log('Écart au contact, tous cas confondus :');
+console.log('Écart entre les boîtes au contact, tous cas confondus :');
 for (const [label, arenaWidth, heroWidth, foeWidth, share] of CASES) {
   const { heroRight, foeLeft } = arrival(arenaWidth, heroWidth, foeWidth, share);
   // Sur une scène trop étroite, les deux se tiennent au plus près possible sans
@@ -60,7 +68,23 @@ console.log('\nRépartition de la marche :');
 {
   const l = arenaLayout(368, 96, 64, 1);
   check("l'ennemi volant ne bouge pas", l.foeTravel, 0);
-  check('le héros couvre tout', l.heroTravel, 368 - EDGE - 64 - EDGE - 96 - CONTACT_GAP);
+  check(
+    'le héros couvre tout',
+    l.heroTravel,
+    368 - EDGE - 64 + boxInset(64, FOE_BOX) - (EDGE + 96 - boxInset(96, HERO_BOX)) - CONTACT_GAP,
+  );
+}
+
+console.log('\nBoîtes de collision :');
+{
+  check('boîte du héros (case de 96)', 96 * HERO_BOX, 76.8);
+  check('boîte d’un ennemi (case de 90)', 90 * FOE_BOX, 40.5);
+  const l = arenaLayout(368, 96, 90, 0.5);
+  // Les cases se chevauchent à l'arrivée : c'est voulu, leur vide ne compte pas.
+  const caseGap = l.foeLeft - l.foeTravel - (l.heroLeft + 96 + l.heroTravel);
+  console.log(
+    `  · les cases se chevauchent de ${Math.round(-caseGap)} px à l'arrivée (le vide des planches)`,
+  );
 }
 {
   const l = arenaLayout(368, 96, 90, 0);
@@ -68,7 +92,7 @@ console.log('\nRépartition de la marche :');
 }
 
 console.log('\nFile ennemie :');
-check('écart entre deux rangs (sprite de 90)', fileSpacing(90), 41);
+check('écart entre deux rangs (case de 90)', fileSpacing(90), Math.round(90 * FOE_BOX) + CONTACT_GAP);
 
 console.log('');
 if (failures) {

@@ -1,5 +1,6 @@
 /**
- * Géométrie de l'arène : où chacun se tient, et quelle distance il couvre.
+ * Géométrie de l'arène : où chacun se tient, quelle distance il couvre, et où
+ * sont les boîtes de collision.
  *
  * Tout est **calculé**, rien n'est mesuré dans le DOM. Trois corrections de suite
  * ont échoué parce que la mesure portait sur le mauvais élément — un emplacement
@@ -15,18 +16,35 @@
 export const EDGE = 10;
 
 /**
- * Espace laissé entre les deux sprites au contact. Quelques pixels : ils se
- * touchent presque, sans se chevaucher.
+ * Espace laissé entre les deux **boîtes de collision** au contact. Quelques
+ * pixels : elles se touchent presque, sans se chevaucher.
  */
-export const CONTACT_GAP = 6;
+export const CONTACT_GAP = 4;
+
+/**
+ * Largeur de la boîte de collision, en fraction de la case du sprite.
+ *
+ * Les planches laissent beaucoup de vide autour du dessin, et bien plus pour les
+ * créatures que pour les personnages : une boîte égale à la case entière arrêtait
+ * les combattants loin l'un de l'autre. Le héros perd donc un peu de sa largeur,
+ * les ennemis beaucoup — c'est ce qui les amène corps à corps.
+ */
+export const HERO_BOX = 0.8;
+export const FOE_BOX = 0.45;
+
+/** Vide de chaque côté du dessin, pour une largeur de case et une fraction. */
+export const boxInset = (width: number, factor: number) => (width * (1 - factor)) / 2;
 
 export interface ArenaLayout {
-  /** Abscisses de départ, bord gauche du sprite. */
+  /** Abscisses de départ, bord gauche de la case du sprite. */
   heroLeft: number;
   foeLeft: number;
   /** Distance que chacun couvre vers l'autre. */
   heroTravel: number;
   foeTravel: number;
+  /** Vide de chaque côté, pour tracer les boîtes à l'écran. */
+  heroInset: number;
+  foeInset: number;
 }
 
 /**
@@ -36,7 +54,9 @@ export interface ArenaLayout {
  * les deux avancent, tout quand il doit aller chercher un ennemi qui ne bouge pas
  * — une bestiole qui vole —, rien s'il frappe à distance.
  *
- * À l'arrivée, les deux sprites sont séparés d'exactement `CONTACT_GAP`.
+ * À l'arrivée, les deux **boîtes de collision** sont séparées d'exactement
+ * `CONTACT_GAP` ; les cases des sprites, elles, peuvent se chevaucher, puisque
+ * leur vide ne compte pas.
  */
 export function arenaLayout(
   arenaWidth: number,
@@ -45,15 +65,21 @@ export function arenaLayout(
   heroShare: number,
 ): ArenaLayout {
   const heroLeft = EDGE;
-  const foeLeft = Math.max(heroLeft + heroWidth, arenaWidth - EDGE - foeWidth);
-  // Distance libre entre les deux corps, l'écart de contact déduit.
-  const free = Math.max(0, foeLeft - (heroLeft + heroWidth) - CONTACT_GAP);
+  const foeLeft = Math.max(heroLeft + 1, arenaWidth - EDGE - foeWidth);
+  const heroInset = boxInset(heroWidth, HERO_BOX);
+  const foeInset = boxInset(foeWidth, FOE_BOX);
+  // Bords des boîtes qui se font face, et distance libre entre eux.
+  const heroBoxRight = heroLeft + heroWidth - heroInset;
+  const foeBoxLeft = foeLeft + foeInset;
+  const free = Math.max(0, foeBoxLeft - heroBoxRight - CONTACT_GAP);
   const heroTravel = free * heroShare;
-  return { heroLeft, foeLeft, heroTravel, foeTravel: free - heroTravel };
+  return { heroLeft, foeLeft, heroTravel, foeTravel: free - heroTravel, heroInset, foeInset };
 }
 
 /**
- * Écart entre deux rangs d'une même vague : une fraction de la largeur du sprite,
- * pour que la file reste groupée sans que les corps se confondent.
+ * Écart entre deux rangs d'une même vague — et donc le pas que le héros franchit
+ * quand celui de devant tombe : les rangs ne bougent pas, c'est lui qui avance
+ * jusqu'au suivant, boîte contre boîte.
  */
-export const fileSpacing = (foeWidth: number) => Math.round(foeWidth * 0.45);
+export const fileSpacing = (foeWidth: number) =>
+  Math.max(8, Math.round(foeWidth * FOE_BOX) + CONTACT_GAP);

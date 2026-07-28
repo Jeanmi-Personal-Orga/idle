@@ -2,9 +2,16 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
 import {
   districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
-import { WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
+import { STEP_TIME, WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS, spriteSize } from '../game/sprites';
-import { CONTACT_GAP, EDGE, arenaLayout, fileSpacing } from './arena-geometry';
+import {
+  CONTACT_GAP,
+  EDGE,
+  FOE_BOX,
+  HERO_BOX,
+  arenaLayout,
+  fileSpacing,
+} from './arena-geometry';
 import { toggleHitboxes, useHitboxes } from './debug';
 import { store, useGame } from '../game/store';
 import type { Enemy, Hero } from '../game/types';
@@ -96,6 +103,8 @@ export function Arena({
   // Qui est au contact et qui fait la queue : la même règle que le moteur, pour
   // que ceux qu'on voit taper soient exactement ceux qui infligent des dégâts.
   const engaged = engagedEnemies(c.enemies);
+  /** Rangs déjà tombés dans cette vague : autant de pas que le héros a franchis. */
+  const fallen = c.enemies.filter((e) => e.hp <= 0).length;
 
   const guardian = c.wave === c.waves;
   // C'est l'arme équipée qui décide : de mêlée, il faut traverser.
@@ -125,13 +134,21 @@ export function Arena({
   const heroWidth = spriteSize(hero).width;
   const foeWidth = spriteSize(foe, guardian && c.enemies.length === 1 ? 1.3 : 1).width;
   const layout = arenaLayout(arenaWidth, heroWidth, foeWidth, heroShare);
-  const heroTravel = layout.heroTravel;
+  // Les rangs ne reculent pas : quand celui de devant tombe, le héros franchit un
+  // pas de plus, depuis là où il se trouve, pour retrouver le contact.
+  const step = fileSpacing(foeWidth);
+  const heroTravel = layout.heroTravel + fallen * step;
   const foeTravel = foeStyle === 'melee' ? layout.foeTravel : 0;
   // Sortie de scène entre deux vagues : jusqu'au bord droit, derrière l'ennemi.
   const exitTravel = Math.max(0, arenaWidth - EDGE - heroWidth - layout.heroLeft);
   // La marche dure exactement l'approche accordée par le moteur, et se joue
-  // pendant son décompte : à l'arrivée, les coups partent.
-  const walkMs = between ? WAVE_PAUSE * 1000 : Math.max(120, closingTime(state) * 1000);
+  // pendant son décompte : à l'arrivée, les coups partent. Un pas vers le rang
+  // suivant est court (STEP_TIME), l'entrée en scène est longue.
+  const walkMs = between
+    ? WAVE_PAUSE * 1000
+    : fallen > 0
+      ? STEP_TIME * 1000
+      : Math.max(120, closingTime(state) * 1000);
 
   const walking = (c.closing ?? 0) > 0 && !dead;
 
@@ -218,14 +235,19 @@ export function Arena({
 
       {showHitboxes && (
         <div className="hitbox-guides" aria-hidden="true">
-          {/* Ligne de contact : là où s'arrête le bord droit du héros, et le bord
-              gauche de l'ennemi six pixels plus loin. */}
-          <i className="mark hero-stop" style={{ left: layout.heroLeft + heroWidth + heroTravel }} />
-          <i className="mark foe-stop" style={{ left: layout.foeLeft - foeTravel }} />
+          {/* Marques d'arrivée : les bords des **boîtes**, pas des cases. */}
+          <i
+            className="mark hero-stop"
+            style={{ left: layout.heroLeft + heroWidth - layout.heroInset + heroTravel }}
+          />
+          <i
+            className="mark foe-stop"
+            style={{ left: layout.foeLeft + layout.foeInset - foeTravel }}
+          />
           <span className="hitbox-readout">
-            scène {Math.round(arenaWidth)} · héros {Math.round(heroWidth)} +{' '}
-            {Math.round(heroTravel)} · ennemi {Math.round(foeWidth)} + {Math.round(foeTravel)} ·
-            écart {CONTACT_GAP}
+            scène {Math.round(arenaWidth)} · boîtes {Math.round(heroWidth * HERO_BOX)} /{' '}
+            {Math.round(foeWidth * FOE_BOX)} · marche {Math.round(heroTravel)} /{' '}
+            {Math.round(foeTravel)} · écart {CONTACT_GAP} · pas {step}
           </span>
         </div>
       )}
@@ -239,12 +261,15 @@ export function Arena({
           110 ms, ce qui donnait un dash vers l'ennemi.
         */}
         <div
-          key={between ? 'exit' : `${c.district}-${c.wave}`}
+          key={between ? 'exit' : `${c.district}-${c.wave}-${fallen}`}
           className={`mover ${heroAt > 0 ? 'approaching' : ''}`}
           style={{
-            // La sortie part d'où il se trouve, pas de sa marque : sinon on le
-            // voyait revenir à gauche d'un coup avant de repartir à droite.
-            ['--from' as string]: `${between ? heroTravel : 0}px`,
+            // La marche part **d'où il se trouve** : de sa marque pour entrer en
+            // scène, de sa position actuelle pour un pas vers le rang suivant ou
+            // pour la sortie. Sinon on le voyait revenir en arrière d'un coup.
+            ['--from' as string]: `${
+              between ? heroTravel : fallen > 0 ? heroTravel - step : 0
+            }px`,
             ['--to' as string]: `${heroAt}px`,
             animationDuration: `${walkMs}ms`,
             transform: heroAt > 0 ? undefined : 'translateX(0)',
@@ -254,6 +279,14 @@ export function Arena({
             className="lunge"
             style={{ transform: `translateX(${heroJolt}px)` }}
           >
+            {/* La boîte telle qu'elle compte vraiment : la case, resserrée. */}
+            {showHitboxes && (
+              <span
+                className="hitbox-box hero"
+                aria-hidden="true"
+                style={{ left: layout.heroInset, right: layout.heroInset }}
+              />
+            )}
             <Sprite
               character={hero}
               anim={heroAnim(dead, c.reviving, heroWalking, heroStrike, heroHit)}
@@ -298,7 +331,8 @@ export function Arena({
                   : 0
               }
               rank={index}
-              spacing={fileSpacing(foeWidth)}
+              spacing={step}
+              showBox={showHitboxes ? layout.foeInset : undefined}
               walkMs={walkMs}
               walking={foeWalking}
               engaged={engaged.has(index)}
@@ -363,6 +397,7 @@ function FoeUnit({
   cycled,
   guardian,
   spacing,
+  showBox,
 }: {
   scope: FightScope;
   enemy: { hp: number; maxHp: number; sprite: string; name: string };
@@ -379,6 +414,8 @@ function FoeUnit({
   guardian: boolean;
   /** Écart entre deux rangs de la file, en pixels. */
   spacing: number;
+  /** Vide de chaque côté, quand on demande à voir les boîtes ; sinon `undefined`. */
+  showBox?: number;
 }) {
   useGame();
   const sprite = enemy.sprite === 'self' ? hero : enemy.sprite;
@@ -402,6 +439,13 @@ function FoeUnit({
         }}
       >
         <div className="lunge" style={{ transform: `translateX(${jolt}px)` }}>
+          {showBox !== undefined && (
+            <span
+              className="hitbox-box foe"
+              aria-hidden="true"
+              style={{ left: showBox, right: showBox }}
+            />
+          )}
           <Sprite
             character={sprite}
             anim={foeAnim(walking && travel > 0, striking, hit)}

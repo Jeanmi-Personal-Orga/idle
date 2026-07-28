@@ -1737,15 +1737,29 @@ nav .icon {
   border-color: var(--essence);
 }
 
-/* La boîte de collision **est** le rectangle du sprite : on le trace tel quel. */
+/* La case du sprite, en pointillés : elle situe le dessin, mais ne décide rien. */
 .arena.debug-hitbox .sprite-box {
-  outline: 1px solid rgba(79, 214, 160, 0.9);
-  outline-offset: 0;
+  outline: 1px dashed rgba(139, 151, 166, 0.5);
 }
 
-/* Le héros en vert, l'ennemi en ambre, pour les distinguer quand ils se croisent. */
-.arena.debug-hitbox .foe .sprite-box {
-  outline-color: rgba(214, 139, 63, 0.9);
+/*
+ * La boîte de collision : c'est **elle** qui décide du contact. Plus étroite que
+ * la case, franchement plus pour les créatures.
+ */
+.hitbox-box {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  pointer-events: none;
+  border: 1px solid rgba(79, 214, 160, 0.9);
+  background: rgba(79, 214, 160, 0.1);
+}
+
+/* Le héros en vert, les ennemis en ambre : lisible même quand ils se chevauchent. */
+.hitbox-box.foe {
+  border-color: rgba(214, 139, 63, 0.9);
+  background: rgba(214, 139, 63, 0.12);
 }
 
 .hitbox-guides {

@@ -55,6 +55,13 @@ export const WAVE_PAUSE = 2.2;
 export const CLOSING_TIME = 3.2;
 
 /**
+ * Temps que le héros met à franchir le pas qui le sépare du rang suivant, quand
+ * l'ennemi de devant tombe. Personne ne frappe pendant ce pas : la règle « pas de
+ * contact, pas de coup » vaut aussi entre deux ennemis d'une même vague.
+ */
+export const STEP_TIME = 0.7;
+
+/**
  * Combien d'ennemis de mêlée tiennent au contact du héros. Les autres font la
  * queue : ils avancent d'un rang quand un des leurs tombe, et **tant qu'ils
  * attendent ils ne frappent pas** — donc ne font aucun dégât. Un ennemi à
@@ -485,6 +492,9 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
     }
     if (target.hp <= 0) {
       sink({ type: 'kill' });
+      // Le rang suivant ne bouge pas : c'est le héros qui avance jusqu'à lui, et
+      // il ne frappe pas avant d'y être.
+      if (c.enemies.some((e) => e.hp > 0)) c.closing = Math.max(c.closing, STEP_TIME);
       // Un réactif garanti par ennemi tué : le vrai moteur de l'économie de réactifs
       // depuis que les vagues à plusieurs ennemis existent (voir enemyCount).
       state.resources.reagent += 1 * mods.reagentMult;
@@ -636,7 +646,11 @@ function advanceMission(state: GameState, dt: number, rng: () => number, sink: E
       sink({ type: 'hit', damage: dmg, crit, targetIndex });
       if (s.osmosis > 0) m.hero.hp = Math.min(s.health, m.hero.hp + (dmg * s.osmosis) / 100);
     }
-    if (target.hp <= 0) sink({ type: 'kill' });
+    if (target.hp <= 0) {
+      sink({ type: 'kill' });
+      // Même pas d'approche qu'en brume avant de s'occuper du rang suivant.
+      if (m.enemies.some((e) => e.hp > 0)) m.closing = Math.max(m.closing, STEP_TIME);
+    }
     if (m.enemies.every((e) => e.hp <= 0)) {
       onMissionWaveCleared(state, campaign);
       return;
