@@ -338,8 +338,9 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
       // Un réactif garanti par ennemi tué : le vrai moteur de l'économie de réactifs
       // depuis que les vagues à plusieurs ennemis existent (voir enemyCount).
       state.resources.reagent += 1 * mods.reagentMult;
-      // Pièces d'or : plus rares que le réactif, seule monnaie du comptoir.
-      if (rng() < 0.15) state.resources.goldCoin += 1 + Math.floor(c.district / 2);
+      // Aucun sac d'or au combat : c'est la seule monnaie qui ne se gagne pas en
+      // jouant. On part avec vingt, et on en rachète au comptoir — décision
+      // assumée, voir la note du README sur ce que cela implique.
     }
     if (c.enemies.every((e) => e.hp <= 0)) {
       onWaveCleared(state, rng);
