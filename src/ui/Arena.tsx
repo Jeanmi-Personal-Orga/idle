@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
 import {
   districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
-import { WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
+import { CONTACT_SLOTS, WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
 import type { Enemy, Hero } from '../game/types';
@@ -35,20 +35,46 @@ import { Sprite } from './Sprite';
  * de frappe, le déplacement les suit sans changer aucun résultat.
  */
 
-/** Marge laissée entre deux corps au contact. */
-const CONTACT_GAP = 6;
+/**
+ * Portée : de combien les deux boîtes de collision peuvent rester écartées tout
+ * en se touchant « assez » pour frapper. C'est aussi là que la marche s'arrête —
+ * les deux valeurs viennent du même calcul, donc on ne se dépasse plus.
+ */
+const CONTACT_REACH = 8;
 
 /**
- * Les sprites sont dessinés dans une case bien plus large que la créature :
- * on rétrécit donc chaque côté de cette fraction pour obtenir une boîte de
- * collision qui colle au corps. Sans ça, deux personnages « se toucheraient »
- * alors qu'un large vide les sépare encore : plus la valeur est grande, plus il
- * faut se rapprocher pour frapper.
+ * Les sprites sont dessinés dans une case plus large que la créature : on
+ * rétrécit chaque côté de cette fraction pour approcher le corps.
+ *
+ * Attention au sens : **plus la valeur est grande, plus il faut se rapprocher**,
+ * puisque la boîte se réduit. À 0,38 il fallait pratiquement se superposer — d'où
+ * des combattants qui se traversaient. 0,16 laisse une boîte large de deux tiers
+ * de la case, ce qui correspond au corps dessiné.
  */
-const HITBOX_INSET = 0.38;
+const HITBOX_INSET = 0.16;
 
 /** Écart entre deux rangs de la file : assez serré pour que la vague reste groupée. */
 const FILE_SPACING = 30;
+
+/**
+ * Décalage entre deux ennemis qui se battent côte à côte. Petit : ils tapent tous
+ * les deux le héros, donc ils doivent tenir dans la même zone de contact.
+ */
+const SIDE_BY_SIDE = 12;
+
+/**
+ * Distance à couvrir pour un rang donné. Les rangs qui ont une place au contact
+ * viennent au corps du héros, côte à côte ; les autres s'arrêtent en file derrière
+ * eux. Le résultat ne dépend que du rang, donc une mort ne déplace personne.
+ */
+function travelForRank(rank: number, gap: number): number {
+  const start = rank * FILE_SPACING;
+  const target =
+    rank < CONTACT_SLOTS
+      ? rank * SIDE_BY_SIDE
+      : CONTACT_SLOTS * SIDE_BY_SIDE + (rank - CONTACT_SLOTS + 1) * FILE_SPACING;
+  return Math.max(0, start + gap - target);
+}
 
 
 export function Arena({
@@ -266,8 +292,13 @@ export function Arena({
               hero={hero}
               cycled={cycleOf(c.district) > 0}
               guardian={guardian && c.enemies.length === 1}
-              // Toute la file couvre la même distance : la formation se conserve.
-              travel={spriteStyle(enemy.sprite === 'self' ? hero : enemy.sprite) === 'melee' ? foeTravel : 0}
+              // Chacun couvre la distance de son rang : les deux premiers viennent
+              // au contact côte à côte, les suivants s'arrêtent derrière.
+              travel={
+                spriteStyle(enemy.sprite === 'self' ? hero : enemy.sprite) === 'melee'
+                  ? travelForRank(index, foeTravel)
+                  : 0
+              }
               rank={index}
               walkMs={walkMs}
               walking={foeWalking}
@@ -411,6 +442,11 @@ function hitbox(el: HTMLElement): { left: number; right: number } {
   return { left: r.left + inset, right: r.right - inset };
 }
 
+/** Vrai quand les deux boîtes sont à portée l'une de l'autre. */
+function withinReach(hero: HTMLElement, foe: HTMLElement): boolean {
+  return hitbox(hero).right + CONTACT_REACH >= hitbox(foe).left;
+}
+
 /**
  * Contact entre deux boîtes de collision, mesuré à chaque image. Tant qu'elles
  * ne se chevauchent pas, le moteur n'autorise aucune attaque de mêlée : ce que
@@ -442,7 +478,7 @@ function useContact(
       let value: boolean;
       if (!flags.current.active) value = false;
       else if (!ea || !eb) value = true;
-      else value = hitbox(ea).right >= hitbox(eb).left || flags.current.walkDone;
+      else value = withinReach(ea, eb) || flags.current.walkDone;
       if (value === last) return;
       last = value;
       store.setContact(scope, value);
@@ -480,10 +516,13 @@ function useFalling(flag: boolean, ms: number): boolean {
 }
 
 /**
- * Distance libre entre les deux combattants, mesurée dans le DOM : les gabarits
- * diffèrent (un rat n'est pas un chevalier) et un pourcentage fixe placerait mal
- * le point de contact. On mesure les positions de départ, pas les rectangles
- * déjà déplacés.
+ * Distance qu'il reste à couvrir pour amener les deux **boîtes de collision** à
+ * portée — pas les cases des sprites, qui débordent largement des corps. C'est le
+ * même calcul que `withinReach`, appliqué aux positions de repos : la marche
+ * s'arrête donc exactement là où les coups deviennent possibles, sans dépasser.
+ *
+ * On mesure en coordonnées de mise en page (`offsetLeft` / `offsetWidth`), pas en
+ * rectangles à l'écran : ceux-là portent déjà les déplacements en cours.
  */
 function useGap(
   arena: React.RefObject<HTMLDivElement | null>,
@@ -498,8 +537,11 @@ function useGap(
       const ea = a.current;
       const eb = b.current;
       if (!ea || !eb) return;
-      const left = ea.offsetLeft + ea.offsetWidth;
-      setGap(Math.max(0, eb.offsetLeft - left - CONTACT_GAP));
+      // Bord avant de chacun, corps compris : le héros pousse vers la droite,
+      // l'ennemi vers la gauche.
+      const heroFront = ea.offsetLeft + ea.offsetWidth * (1 - HITBOX_INSET);
+      const foeFront = eb.offsetLeft + eb.offsetWidth * HITBOX_INSET;
+      setGap(Math.max(0, foeFront - heroFront - CONTACT_REACH));
     };
     measure();
     const el = arena.current;
