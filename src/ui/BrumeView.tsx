@@ -76,15 +76,19 @@ export function BrumeView() {
             hp={c.hero.hp}
             max={s.health}
           />
+          {/* Pendant le temps mort entre deux vagues, la liste d'ennemis est vide :
+              la barre annonce l'attente au lieu de lire un ennemi qui n'existe pas. */}
           <FighterBar
             side="foe"
             name={
-              c.enemies.length > 1
-                ? `${c.enemies.filter((e) => e.hp > 0).length} / ${c.enemies.length} ennemis`
-                : c.enemies[0].name
+              c.enemies.length === 0
+                ? 'Vague suivante…'
+                : c.enemies.length > 1
+                  ? `${c.enemies.filter((e) => e.hp > 0).length} / ${c.enemies.length} ennemis`
+                  : c.enemies[0].name
             }
             hp={c.enemies.reduce((sum, e) => sum + Math.max(0, e.hp), 0)}
-            max={c.enemies.reduce((sum, e) => sum + e.maxHp, 0)}
+            max={Math.max(1, c.enemies.reduce((sum, e) => sum + e.maxHp, 0))}
           />
         </div>
       </div>
