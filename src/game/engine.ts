@@ -51,6 +51,33 @@ export const WAVE_PAUSE = 2.2;
  */
 export const CLOSING_TIME = 3.2;
 
+/**
+ * Combien d'ennemis de mêlée tiennent au contact du héros. Les autres font la
+ * queue : ils avancent d'un rang quand un des leurs tombe, et **tant qu'ils
+ * attendent ils ne frappent pas** — donc ne font aucun dégât. Un ennemi à
+ * distance n'occupe pas de place, il tire de loin.
+ */
+export const CONTACT_SLOTS = 2;
+
+/**
+ * Indices des ennemis capables de frapper maintenant : ceux à distance, et les
+ * `CONTACT_SLOTS` premiers vivants au corps à corps.
+ */
+export function engagedEnemies(enemies: Enemy[]): Set<number> {
+  const engaged = new Set<number>();
+  let melee = 0;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (e.hp <= 0) continue;
+    if (spriteStyle(e.sprite) === 'ranged') {
+      engaged.add(i);
+      continue;
+    }
+    if (melee++ < CONTACT_SLOTS) engaged.add(i);
+  }
+  return engaged;
+}
+
 /** Vrai si l'arme équipée frappe sans avoir besoin d'approcher. */
 export const heroIsRanged = (state: GameState) => Boolean(state.equipped.arme?.ranged);
 
@@ -378,9 +405,14 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
     }
   }
 
-  // Riposte : chaque ennemi encore en vie attaque à sa propre cadence.
-  for (const enemy of c.enemies) {
-    if (enemy.hp <= 0) continue;
+  // Riposte : tous ceux qui sont au contact frappent en même temps, chacun à sa
+  // cadence. Ceux qui font la queue derrière attendent leur tour sans rien
+  // infliger — leur recharge ne tourne même pas, ils repartent d'un coup prêt
+  // quand une place se libère.
+  const engaged = engagedEnemies(c.enemies);
+  for (let i = 0; i < c.enemies.length; i++) {
+    const enemy = c.enemies[i];
+    if (enemy.hp <= 0 || !engaged.has(i)) continue;
     enemy.cooldown -= dt;
     while (enemy.cooldown <= 0) {
       enemy.cooldown += enemy.interval;
@@ -501,8 +533,11 @@ function advanceMission(state: GameState, dt: number, rng: () => number, sink: E
     }
   }
 
-  for (const enemy of m.enemies) {
-    if (enemy.hp <= 0) continue;
+  // Même règle qu'en brume : seuls ceux au contact frappent (voir engagedEnemies).
+  const engaged = engagedEnemies(m.enemies);
+  for (let i = 0; i < m.enemies.length; i++) {
+    const enemy = m.enemies[i];
+    if (enemy.hp <= 0 || !engaged.has(i)) continue;
     enemy.cooldown -= dt;
     while (enemy.cooldown <= 0) {
       enemy.cooldown += enemy.interval;

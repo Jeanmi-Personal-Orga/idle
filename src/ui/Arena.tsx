@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
 import {
   districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
-import { WAVE_PAUSE, closingTime, formatNum } from '../game/engine';
+import { WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
 import type { Enemy, Hero } from '../game/types';
@@ -17,7 +17,14 @@ import { Sprite } from './Sprite';
  *    n'est jamais replacé d'un coup ;
  * 2. l'ennemi sort de la brume à droite et **marche jusqu'à lui** — le héros fait
  *    quelques pas à sa rencontre s'il se bat au contact ;
- * 3. arrivés au contact ils y restent, et échangent les coups jusqu'à la mort.
+ * 3. arrivés au contact ils y restent, et échangent les coups jusqu'à la mort ;
+ * 4. vague nettoyée, le héros marche jusqu'au bout à droite, l'écran passe au
+ *    noir, et la vague suivante se lève sur une scène remise à zéro — héros à
+ *    gauche, ennemis à droite.
+ *
+ * Sur une vague à plusieurs, seuls les `CONTACT_SLOTS` premiers tiennent au
+ * contact et frappent ensemble ; les suivants attendent leur tour en retrait et
+ * n'infligent aucun dégât tant qu'ils n'ont pas de place.
  *
  * L'approche est comptée par le **moteur** (`combat.closing`) : tant qu'elle
  * dure, aucun coup ne part, d'aucun des deux camps. L'affichage et la simulation
@@ -68,9 +75,12 @@ export function Arena({
   const sprite = front?.sprite ?? 'champignon';
   // « Écho de soi » du Puits Prismatique : l'ennemi est le sprite du joueur.
   const foe = sprite === 'self' ? hero : sprite;
-  const extras = c.enemies.slice(frontIndex + 1).filter((e) => e.hp > 0);
-  /** Morts déjà tombés dans cette vague : le héros gagne du terrain sur chacun. */
-  const fallen = c.enemies.filter((e) => e.hp <= 0).length;
+  // Qui est au contact et qui fait la queue : la même règle que le moteur, pour
+  // que ceux qu'on voit taper soient exactement ceux qui infligent des dégâts.
+  const engaged = engagedEnemies(c.enemies);
+  const extras = c.enemies
+    .map((enemy, index) => ({ enemy, index }))
+    .filter(({ enemy, index }) => enemy.hp > 0 && index > frontIndex);
 
   const guardian = !fight && c.wave === WAVES_PER_DISTRICT;
   // C'est l'arme équipée qui décide : de mêlée, il faut traverser.
@@ -93,11 +103,10 @@ export function Arena({
   // - héros au contact, ennemi à distance (une bestiole qui vole) : le héros fait
   //   **tout** le chemin, il va la chercher sous le nez ;
   // - héros à distance : il ne bouge pas, l'ennemi traverse.
-  //
-  // Chaque ennemi tombé pousse le héros un peu plus loin : la vague recule
-  // visiblement au lieu de rester plantée.
   const heroShare = heroStyle === 'melee' ? (foeStyle === 'melee' ? 0.5 : 1) : 0;
-  const heroTravel = gap * heroShare + (heroShare > 0 ? fallen * 10 : 0);
+  // Plus de bonus par mort : les ennemis viennent maintenant au contact les uns
+  // après les autres, le héros n'a plus besoin d'avancer pour les chercher.
+  const heroTravel = gap * heroShare;
   const foeTravel = foeStyle === 'melee' ? gap - gap * heroShare : 0;
   // La marche dure exactement l'approche accordée par le moteur, et se joue
   // pendant son décompte : à l'arrivée, les coups partent.
@@ -123,7 +132,15 @@ export function Arena({
 
   // Entre deux vagues, le héros continue jusqu'au bout de l'arène : c'est ce
   // déplacement qui raconte qu'on avance, plutôt qu'un décor qui défile.
+  //
+  // Comme l'ennemi, il part **toujours de sa marque** et s'anime vers sa cible :
+  // une transition l'aurait fait reculer en glissant à la fin du temps mort, au
+  // lieu de réapparaître à gauche sur la nouvelle scène.
   const heroAt = dead ? 0 : between ? gap : heroTravel;
+  // Le noir couvre la coupure : il tombe pendant que le héros finit sa sortie,
+  // et se lève sur la scène remise à zéro. C'est lui qui autorise le
+  // repositionnement instantané des deux camps.
+  const resuming = useFalling(between, 500);
   // Les à-coups de combat vivent sur leur propre couche : ils ne touchent plus à
   // la position de marche.
   const heroJolt = (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
@@ -148,6 +165,16 @@ export function Arena({
         />
       ))}
 
+      {/* Le fondu au noir de l'entre-deux-vagues : il descend quand le héros
+          atteint la sortie, et se lève sur la vague suivante déjà en place. */}
+      {(between || resuming) && (
+        <div
+          className={`blackout ${between ? 'falling' : 'rising'}`}
+          aria-hidden="true"
+          style={between ? { animationDuration: `${walkMs}ms` } : undefined}
+        />
+      )}
+
       {/* Chapitre et vague s'affichent sur la scène, pas dans une barre au-dessus :
           c'est là que le joueur regarde. L'annonce se lit en grand pendant le
           temps mort, et reste discrète pendant le combat. */}
@@ -170,11 +197,12 @@ export function Arena({
           110 ms, ce qui donnait un dash vers l'ennemi.
         */}
         <div
-          className="mover"
+          key={between ? 'exit' : `${c.district}-${c.wave}`}
+          className={`mover ${heroAt > 0 ? 'approaching' : ''}`}
           style={{
-            transform: `translateX(${heroAt}px)`,
-            transitionDuration: `${walkMs}ms`,
-            transitionTimingFunction: 'linear',
+            ['--to' as string]: `${heroAt}px`,
+            animationDuration: `${walkMs}ms`,
+            transform: heroAt > 0 ? undefined : 'translateX(0)',
           }}
         >
           <div className="lunge" style={{ transform: `translateX(${heroJolt}px)` }}>
@@ -237,14 +265,19 @@ export function Arena({
         <Projectiles distance={gap} swings={store.foeSwings[scope]} color="#9ad6c0" />
       )}
 
-      {/* Vague de contrat : les ennemis en surnombre restent groupés, sans marche. */}
-      {extras.map((enemy, i) => (
+      {/* Vague à plusieurs : ceux qui tiennent au contact frappent en même temps
+          que le premier ; ceux qui n'ont pas de place patientent en retrait. */}
+      {extras.map(({ enemy, index }, i) => (
         <ExtraFoe
           scope={scope}
-          key={`${frontIndex}-${i}`}
+          key={index}
           enemy={enemy}
-          index={frontIndex + i + 1}
-          offset={(i + 1) * 26}
+          index={index}
+          engaged={engaged.has(index)}
+          // Au contact on se serre contre le premier ; en attente on reste loin
+          // derrière, pour qu'on voie qui se bat et qui attend son tour.
+          offset={engaged.has(index) ? 22 : 40 + i * 24}
+          hidden={between}
         />
       ))}
     </div>
@@ -283,25 +316,33 @@ function ExtraFoe({
   enemy,
   index,
   offset,
+  engaged,
+  hidden,
 }: {
   scope: FightScope;
   enemy: { hp: number; maxHp: number; sprite: string; name: string };
   index: number;
   offset: number;
+  /** Au contact : il frappe avec les autres. Sinon il attend, et ne fait rien. */
+  engaged: boolean;
+  hidden: boolean;
 }) {
   useGame();
   const lastHit = [...store.hits[scope]].reverse().find((h) => h.targetIndex === index);
   const hit = usePulse(lastHit?.id ?? 0, 150);
+  // Les ennemis au contact frappent ensemble : ils suivent donc le même compteur
+  // de salves que celui de devant.
+  const striking = usePulse(store.foeSwings[scope], 220) && engaged;
   return (
     <div
-      className="fighter-slot foe extra"
+      className={`fighter-slot foe extra ${engaged ? '' : 'waiting'} ${hidden ? 'gone' : ''}`}
       // Le décalage est animé : quand le rang de devant tombe, ceux de derrière
       // avancent d'un cran au lieu de sauter.
       style={{ transform: `translateX(-${offset}px)` }}
     >
       <Sprite
         character={enemy.sprite === 'self' ? DEFAULT_CHARACTER : enemy.sprite}
-        anim={hit ? 'hurt' : 'idle'}
+        anim={hit ? 'hurt' : striking ? 'attack' : 'idle'}
         fallbackAnim={['idle']}
         flip
         className={hit ? 'flash' : ''}
@@ -323,6 +364,27 @@ function usePulse(counter: number, ms: number): boolean {
     const t = window.setTimeout(() => setOn(false), ms);
     return () => window.clearTimeout(t);
   }, [counter, ms]);
+
+  return on;
+}
+
+/**
+ * Vrai pendant `ms` après que `flag` soit repassé à faux. Sert au fondu qui se
+ * lève : le temps mort est fini côté moteur, mais l'écran doit encore
+ * s'éclaircir.
+ */
+function useFalling(flag: boolean, ms: number): boolean {
+  const [on, setOn] = useState(false);
+  const previous = useRef(flag);
+
+  useEffect(() => {
+    const fell = previous.current && !flag;
+    previous.current = flag;
+    if (!fell) return;
+    setOn(true);
+    const t = window.setTimeout(() => setOn(false), ms);
+    return () => window.clearTimeout(t);
+  }, [flag, ms]);
 
   return on;
 }
