@@ -1,6 +1,7 @@
 /** Types du domaine — L'Alchimiste de Brume. */
 
 import type { CharacterId } from './characters';
+import type { DailyBoard } from './campaigns';
 
 /** Identifiants des statistiques. Les valeurs sont des pourcentages sauf power/health. */
 export type StatKey =
@@ -161,8 +162,16 @@ export interface LoopFilters {
  * temps. Il a donc ses propres points de vie et ses propres ennemis.
  */
 export interface MissionRun {
+  /** Campagne dont la mission emprunte le décor et les ennemis. */
   id: string;
+  /** Mission du jour jouée (voir `DailyMission`). */
+  missionId: string;
+  /** Chapitre du tirage du jour, et nombre de vagues à tenir. */
+  district: number;
+  waves: number;
   wave: number;
+  /** Temps mort entre deux vagues, comme en brume. */
+  interlude: number;
   hero: Hero;
   enemies: Enemy[];
   closing: number;
@@ -193,6 +202,8 @@ export interface GameState {
   keys: { left: number; day: string };
   /** Mission en cours, ou `null`. Voir `MissionRun`. */
   mission: MissionRun | null;
+  /** Tableau des missions du jour ; retiré au sort à chaque changement de date. */
+  daily: DailyBoard;
   equipped: Partial<Record<SlotId, Item>>;
   stash: Item[];
   distilling: Distillation | null;

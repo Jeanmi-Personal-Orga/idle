@@ -26,15 +26,17 @@ import { NEUTRAL_MODS, advanceResearch, insightReward } from './tech';
 import {
   KEYS_PER_DAY,
   campaignDef,
-  campaignDepth,
-  campaignRewards,
+  dailyBonus,
+  missionRewards,
+  rollDailyMissions,
   type Campaign,
+  type DailyMission,
 } from './campaigns';
 import { spriteStyle } from './characters';
 import type { CharacterId } from './characters';
-import type { Enemy, GameState, Item, SlotId } from './types';
+import type { Enemy, GameState, Item, MissionRun, SlotId } from './types';
 
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 
 /**
  * Temps mort entre deux vagues, en secondes. Il sert à raconter : le héros
@@ -155,15 +157,15 @@ export function makeEnemies(district: number, wave: number, damageMult = 1): Ene
  */
 export function makeCampaignEnemies(
   campaign: Campaign,
+  mission: { district: number; waves: number },
   wave: number,
-  deepest: number,
   damageMult = 1,
 ): Enemy[] {
-  const last = wave >= campaign.waves;
+  const last = wave >= mission.waves;
   const scale = last ? 2.2 : 1;
   const name = last ? `${campaign.enemies[2]} (gardien)` : campaign.enemies[wave % 2];
   const sprite = last ? campaign.sprites[2] : campaign.sprites[wave % 2];
-  return [buildEnemy(campaignDepth(campaign, deepest), wave, damageMult, scale, name, sprite)];
+  return [buildEnemy(mission.district, wave, damageMult, scale, name, sprite)];
 }
 
 /**
@@ -192,33 +194,75 @@ export function refreshKeys(state: GameState) {
 }
 
 /**
+ * Retire les missions du jour si la date de Paris a changé. Le tirage est
+ * déterministe (jour + progression), donc rouvrir le jeu ne rebrasse rien : on
+ * retrouve exactement le tableau qu'on avait laissé.
+ */
+export function refreshDaily(state: GameState) {
+  const day = today();
+  if (state.daily?.day === day) return;
+  state.daily = {
+    day,
+    missions: rollDailyMissions(day, state.ascension.deepest),
+    bonusPaid: false,
+  };
+  // Une mission en cours n'a plus de tableau : on la laisse tomber plutôt que de
+  // payer une récompense d'hier avec le tirage d'aujourd'hui.
+  if (state.mission) state.mission = null;
+}
+
+/** Vrai quand les trois missions du jour sont remportées. */
+export const allMissionsWon = (missions: DailyMission[]) =>
+  missions.length > 0 && missions.every((m) => m.status === 'won');
+
+/**
  * Lance une mission. Elle se déroule **à côté** du chapitre : le combat de brume
  * continue pendant ce temps, les deux fronts avancent en parallèle.
  */
-export function startCampaign(state: GameState, id: string): boolean {
-  const campaign = campaignDef(id);
-  if (!campaign || state.mission) return false;
-  // Une clé par tentative, trois par jour : c'est ce qui empêche de farmer une
-  // mission en boucle et donne du poids au choix de laquelle faire.
+export function startMission(state: GameState, missionId: string): boolean {
+  refreshDaily(state);
+  if (state.mission) return false;
+  const mission = state.daily.missions.find((m) => m.id === missionId);
+  if (!mission || mission.status === 'won') return false;
+  const campaign = campaignDef(mission.campaign);
+  if (!campaign) return false;
+  // Une clé par tentative. Elle n'est **rendue qu'en cas de défaite** : une
+  // victoire la consomme, donc trois clés valent trois missions remportées, mais
+  // rater n'a jamais fermé la journée.
   refreshKeys(state);
   if (state.keys.left < 1) return false;
   state.keys.left -= 1;
-  state.mission = {
-    id,
+  const run: MissionRun = {
+    id: campaign.id,
+    missionId: mission.id,
+    district: mission.district,
+    waves: mission.waves,
     wave: 1,
+    interlude: 0,
     hero: { hp: heroStats(state).health, cooldown: 0 },
-    enemies: makeCampaignEnemies(campaign, 1, state.ascension.deepest, allMods(state).enemyDamageMult),
+    enemies: makeCampaignEnemies(campaign, mission, 1, allMods(state).enemyDamageMult),
     closing: 0,
     reviving: 0,
   };
-  state.mission.closing = closingTime(state, state.mission.enemies);
-  pushLog(state, `Mission : ${campaign.name}. ${campaign.waves} vagues, tout ou rien.`);
+  run.closing = closingTime(state, run.enemies);
+  state.mission = run;
+  pushLog(state, `Mission : ${campaign.name}. ${mission.waves} vagues, tout ou rien.`);
   return true;
 }
 
-/** Termine la mission en cours, avec ou sans récompense. */
-export function leaveCampaign(state: GameState, reason: string) {
+/**
+ * Termine la mission en cours sur une **défaite** : la clé est rendue, la
+ * mission redevient jouable, et le tableau du jour en garde la trace.
+ */
+export function loseMission(state: GameState, reason: string) {
+  const run = state.mission;
   state.mission = null;
+  if (run) {
+    const mission = state.daily.missions.find((m) => m.id === run.missionId);
+    if (mission && mission.status !== 'won') mission.status = 'lost';
+    // La clé revient : on ne perd une clé qu'en remportant une mission.
+    state.keys.left = Math.min(KEYS_PER_DAY, state.keys.left + 1);
+  }
   pushLog(state, reason);
 }
 
@@ -237,6 +281,11 @@ export function newGame(): GameState {
     pendingContract: null,
     keys: { left: KEYS_PER_DAY, day: today() },
     mission: null,
+    daily: {
+      day: today(),
+      missions: rollDailyMissions(today(), 0),
+      bonusPaid: false,
+    },
     equipped: {},
     stash: [],
     distilling: null,
@@ -509,11 +558,27 @@ function advanceMission(state: GameState, dt: number, rng: () => number, sink: E
 
   if (m.reviving > 0) {
     // Une chute en mission n'a pas de seconde chance : on rentre bredouille.
-    leaveCampaign(state, `${campaign.name} : tombé en route, rien à rapporter.`);
+    loseMission(state, `${campaign.name} : tombé en route, rien à rapporter.`);
     return;
   }
 
   m.hero.hp = Math.min(s.health, m.hero.hp + ((s.health * s.condensation) / 100) * dt);
+
+  // Temps mort entre deux vagues, comme en brume : personne ne se bat, le héros
+  // sort par la droite et la vague suivante s'annonce.
+  if ((m.interlude ?? 0) > 0) {
+    m.interlude = Math.max(0, (m.interlude ?? 0) - dt);
+    if (m.interlude > 0) return;
+    m.enemies = makeCampaignEnemies(campaign, m, m.wave, allMods(state).enemyDamageMult);
+    m.closing = closingTime(state, m.enemies);
+    return;
+  }
+
+  // Garde-fou symétrique du chapitre : jamais de vague vide hors temps mort.
+  if (m.enemies.length === 0) {
+    m.enemies = makeCampaignEnemies(campaign, m, m.wave, allMods(state).enemyDamageMult);
+    m.closing = closingTime(state, m.enemies);
+  }
 
   if (m.closing > 0) {
     m.closing = Math.max(0, m.closing - dt);
@@ -567,42 +632,65 @@ function advanceMission(state: GameState, dt: number, rng: () => number, sink: E
       sink({ type: 'taken', damage: enemy.damage });
       if (m.hero.hp <= 0) {
         m.hero.hp = 0;
-        leaveCampaign(state, `${campaign.name} : tombé face à ${enemy.name}.`);
+        loseMission(state, `${campaign.name} : tombé face à ${enemy.name}.`);
         return;
       }
     }
   }
 }
 
-/** Vague de mission nettoyée : la suivante, ou le paiement final. */
+/** Vague de mission nettoyée : la suivante, ou la victoire. */
 function onMissionWaveCleared(state: GameState, campaign: Campaign) {
   const m = state.mission;
   if (!m) return;
-  if (m.wave >= campaign.waves) {
-    // Les trois essences sont payées, avec une part triple pour celle que la
-    // mission met en avant. Le montant suit sa difficulté et la progression.
-    const reward = campaignRewards(campaign, state.ascension.deepest);
-    state.resources.essence += reward.essence;
-    state.resources.reagent += reward.reagent;
-    state.resources.insight += reward.insight;
-    state.mission = null;
-    pushLog(
-      state,
-      `${campaign.name} achevée : +${formatNum(reward.essence)} essence, +${formatNum(
-        reward.reagent,
-      )} d'équipement, +${formatNum(reward.insight)} de tech.`,
-    );
+  if (m.wave >= m.waves) {
+    winMission(state, campaign, m);
     return;
   }
   m.wave += 1;
-  m.enemies = makeCampaignEnemies(
-    campaign,
-    m.wave,
-    state.ascension.deepest,
-    allMods(state).enemyDamageMult,
-  );
+  m.enemies = [];
+  // Même respiration qu'en brume : le héros sort par la droite, l'écran passe au
+  // noir, la vague suivante entre par la droite.
+  m.interlude = WAVE_PAUSE;
   m.hero.cooldown = 0;
-  m.closing = closingTime(state, m.enemies);
+}
+
+/**
+ * Mission remportée : sa récompense, la trace « victoire » au tableau, et la
+ * prime si les trois du jour sont tombées.
+ */
+function winMission(state: GameState, campaign: Campaign, run: MissionRun) {
+  const mission = state.daily.missions.find((m) => m.id === run.missionId);
+  state.mission = null;
+  if (!mission) return;
+  mission.status = 'won';
+  const reward = missionRewards(mission);
+  state.resources.essence += reward.essence;
+  state.resources.reagent += reward.reagent;
+  state.resources.insight += reward.insight;
+  pushLog(
+    state,
+    `Victoire — ${campaign.name} : +${formatNum(reward.essence)} essence, +${formatNum(
+      reward.reagent,
+    )} d'équipement, +${formatNum(reward.insight)} de tech.`,
+  );
+
+  if (allMissionsWon(state.daily.missions) && !state.daily.bonusPaid) {
+    const bonus = dailyBonus(state.daily.missions);
+    state.daily.bonusPaid = true;
+    state.resources.essence += bonus.essence;
+    state.resources.reagent += bonus.reagent;
+    state.resources.insight += bonus.insight;
+    state.resources.catalyst += bonus.catalyst;
+    pushLog(
+      state,
+      `Les trois missions du jour sont tombées : prime de +${formatNum(
+        bonus.essence,
+      )} essence, +${formatNum(bonus.reagent)} d'équipement, +${formatNum(
+        bonus.insight,
+      )} de tech et 1 catalyseur.`,
+    );
+  }
 }
 
 /** Crédite une partie des gains accumulés hors-ligne. */

@@ -389,12 +389,21 @@ main {
   right: 3%;
 }
 
-/* Ennemis en surnombre (vague de contrat) : en retrait, sans mise en scène. */
-.fighter-slot.foe.extra {
-  transition: transform 0.5s ease-out;
-  z-index: 0;
-  transform-origin: bottom right;
-  scale: 0.8;
+/*
+ * Un rang de la file ennemie. Position absolue et empilée sur le même bord droit
+ * que le slot : c'est le rang qui décale, pas le flux, donc une mort ne pousse
+ * personne.
+ */
+.foe-unit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+}
+
+/* Celui qui attend sa place au contact : présent, mais visiblement en retrait. */
+.foe-unit .waiting {
+  opacity: 0.72;
+  filter: brightness(0.82);
 }
 
 /*
@@ -1698,16 +1707,27 @@ nav .icon {
   z-index: 5;
 }
 
-/* Ceux qui n'ont pas de place au contact attendent, un peu effacés. */
-.fighter-slot.foe.extra.waiting {
-  opacity: 0.75;
-  filter: brightness(0.8);
-}
-
 /* L'ennemi disparaît proprement entre deux vagues. */
 .fighter-slot.foe.gone {
   opacity: 0;
   transition: opacity 0.25s ease-out;
+}
+
+/* Issue d'une mission du jour : victoire ou défaite, lisible d'un coup d'œil. */
+.mission-result {
+  border-radius: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+}
+
+.mission-result.won {
+  border-color: color-mix(in srgb, var(--essence) 45%, var(--line));
+  color: var(--essence);
+}
+
+.mission-result.lost {
+  border-color: color-mix(in srgb, #e06c6c 45%, var(--line));
+  color: #e59a9a;
 }
 
 /* Puissance totale, à côté du compte : le seul chiffre de résumé de l'en-tête. */

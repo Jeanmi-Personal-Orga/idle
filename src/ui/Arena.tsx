@@ -47,6 +47,9 @@ const CONTACT_GAP = 6;
  */
 const HITBOX_INSET = 0.38;
 
+/** Écart entre deux rangs de la file : assez serré pour que la vague reste groupée. */
+const FILE_SPACING = 30;
+
 
 export function Arena({
   fight,
@@ -54,7 +57,15 @@ export function Arena({
   district,
 }: {
   /** Le combat à afficher : celui du chapitre, ou celui d'une mission. */
-  fight?: { hero: Hero; enemies: Enemy[]; closing: number; reviving: number };
+  fight?: {
+    hero: Hero;
+    enemies: Enemy[];
+    closing: number;
+    reviving: number;
+    interlude?: number;
+    wave?: number;
+    waves?: number;
+  };
   scope?: FightScope;
   /** Profondeur, pour la teinte des ennemis et le décor. */
   district?: number;
@@ -68,9 +79,11 @@ export function Arena({
     closing: fight?.closing ?? chapter.closing,
     reviving: fight?.reviving ?? chapter.reviving,
     district: district ?? chapter.district,
-    wave: chapter.wave,
-    // Une mission n'a pas de temps mort : ses vagues s'enchaînent.
-    interlude: fight ? 0 : (chapter.interlude ?? 0),
+    wave: fight?.wave ?? chapter.wave,
+    // Nombre de vagues du front affiché : une mission a la longueur de son
+    // tirage du jour, un chapitre en a toujours dix.
+    waves: fight?.waves ?? WAVES_PER_DISTRICT,
+    interlude: fight ? (fight.interlude ?? 0) : (chapter.interlude ?? 0),
   };
   /** Entre deux vagues : le héros marche vers la sortie, personne ne se bat. */
   const between = c.interlude > 0;
@@ -87,11 +100,8 @@ export function Arena({
   // Qui est au contact et qui fait la queue : la même règle que le moteur, pour
   // que ceux qu'on voit taper soient exactement ceux qui infligent des dégâts.
   const engaged = engagedEnemies(c.enemies);
-  const extras = c.enemies
-    .map((enemy, index) => ({ enemy, index }))
-    .filter(({ enemy, index }) => enemy.hp > 0 && index > frontIndex);
 
-  const guardian = !fight && c.wave === WAVES_PER_DISTRICT;
+  const guardian = c.wave === c.waves;
   // C'est l'arme équipée qui décide : de mêlée, il faut traverser.
   const heroStyle = state.equipped.arme?.ranged ? 'ranged' : 'melee';
   const foeStyle = spriteStyle(foe);
@@ -124,20 +134,13 @@ export function Arena({
   // pendant son décompte : à l'arrivée, les coups partent.
   const walkMs = between ? WAVE_PAUSE * 1000 : Math.max(120, closingTime(state) * 1000);
 
-  // L'ennemi marche pendant tout le décompte du moteur : `closed` sert de cible
-  // de déplacement, pas de signal d'arrivée — il vaut donc vrai dès le départ.
-  const closed = !dead;
   const walking = (c.closing ?? 0) > 0 && !dead;
 
 
   // Frappes : impulsion vers l'adversaire au moment du coup.
   const heroStrike = usePulse(store.heroSwings[scope], 220) && !dead;
-  const foeStrike = usePulse(store.foeSwings[scope], 220) && !dead;
-  // Impacts : la cible encaisse — éclat blanc et léger recul. Sur une vague à
-  // plusieurs ennemis, on ne flashe que celui visé (targetIndex), sinon un coup
-  // sur le deuxième ennemi ferait sursauter le premier.
-  const lastHitOnMain = [...store.hits[scope]].reverse().find((h) => h.targetIndex === 0);
-  const foeHit = usePulse(lastHitOnMain?.id ?? 0, 150);
+  // Le héros encaisse : éclat blanc et léger recul. Les ennemis, eux, gèrent leur
+  // propre éclat dans `FoeUnit`, chacun sur les coups qui le visent.
   const heroHit = usePulse(store.foeSwings[scope], 170) && !dead;
 
   // Entre deux vagues, le héros continue jusqu'au bout de l'arène : c'est ce
@@ -169,11 +172,6 @@ export function Arena({
   // Les à-coups de combat vivent sur leur propre couche : ils ne touchent plus à
   // la position de marche.
   const heroJolt = (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
-  // Seuls les à-coups de combat restent dans `foeX` ; l'approche est animée.
-  const foeX = -((foeStrike ? 7 : 0) - (foeHit ? 5 : 0));
-  // La marche est lente et régulière ; les à-coups de combat sont brefs et secs,
-  // et portés par une couche séparée.
-  const foeMoving = foeWalking || (closed && !foeStrike && !foeHit);
 
   return (
     <div className={`arena ${heroHit ? 'shaken' : ''}`} ref={arenaRef}>
@@ -203,15 +201,13 @@ export function Arena({
       {/* Chapitre et vague s'affichent sur la scène, pas dans une barre au-dessus :
           c'est là que le joueur regarde. L'annonce se lit en grand pendant le
           temps mort, et reste discrète pendant le combat. */}
-      {!fight && (
-        <div className={`wave-banner ${between ? 'announce' : ''}`} aria-live="polite">
-          <b>{districtLabel(c.district)}</b>
-          <span>
-            Vague {c.wave} / {WAVES_PER_DISTRICT}
-            {c.wave === WAVES_PER_DISTRICT && ' · gardien'}
-          </span>
-        </div>
-      )}
+      <div className={`wave-banner ${between ? 'announce' : ''}`} aria-live="polite">
+        <b>{districtLabel(c.district)}</b>
+        <span>
+          Vague {c.wave} / {c.waves}
+          {c.wave === c.waves && ' · gardien'}
+        </span>
+      </div>
 
       <div className="fighter-slot hero" ref={heroRef}>
         {/*
@@ -251,76 +247,42 @@ export function Arena({
         </div>
       </div>
 
+      {/*
+        La vague en file indienne. Chaque ennemi garde le rang de son index :
+        son écart de départ ne dépend pas de qui est encore en vie, donc quand
+        celui de devant tombe, les autres **ne bougent pas** — ils restent où ils
+        sont et frappent de là, dès que le moteur leur donne une place au contact.
+      */}
       <div className={`fighter-slot foe ${between || !front ? 'gone' : ''}`} ref={foeRef}>
-        {/*
-          La boîte de déplacement est recréée à chaque vague (`key`) : l'animation
-          d'approche repart donc de l'entrée de l'arène. Une simple transition
-          n'aurait rien joué, puisque l'élément survivait d'une vague à l'autre
-          et se trouvait déjà à destination.
-        */}
-        <div
-          key={`${c.district}-${c.wave}-${frontIndex}`}
-          className={`mover ${foeTravel > 0 ? 'approaching' : ''}`}
-          style={{
-            ['--to' as string]: `${-foeTravel}px`,
-            animationDuration: `${walkMs}ms`,
-            // Les à-coups de frappe se jouent par-dessus, une fois arrivé.
-            transform: foeTravel > 0 ? undefined : 'translateX(0)',
-          }}
-        >
-          <div
-            ref={foeBoxRef}
-            className="lunge"
-            style={{
-              transform: `translateX(${foeX}px)`,
-              transitionDuration: foeMoving ? `${walkMs}ms` : '110ms',
-            }}
-          >
-          <Sprite
-            character={foe}
-            anim={foeAnim(foeWalking, foeStrike, foeHit)}
-            fallbackAnim={['idle']}
-            scale={guardian ? 1.3 : 1}
-            flip
-            className={`foe enter ${cycleOf(c.district) > 0 ? 'cycled' : ''} ${
-              foeStyle === 'ranged' ? 'flyer' : ''
-            } ${foeHit ? 'flash' : ''}`}
-          />
-          </div>
-          {/* L'éclat au point d'impact : sans lui, on ne voit pas le coup porter. */}
-          {foeHit && <span className="impact" aria-hidden="true" />}
-          <FloatingHits scope={scope} />
-        </div>
+        {c.enemies.map((enemy, index) =>
+          enemy.hp <= 0 ? null : (
+            <FoeUnit
+              key={index}
+              // La boîte est recréée à chaque vague : l'entrée en scène rejoue.
+              wave={`${c.district}-${c.wave}`}
+              scope={scope}
+              enemy={enemy}
+              index={index}
+              hero={hero}
+              cycled={cycleOf(c.district) > 0}
+              guardian={guardian && c.enemies.length === 1}
+              // Toute la file couvre la même distance : la formation se conserve.
+              travel={spriteStyle(enemy.sprite === 'self' ? hero : enemy.sprite) === 'melee' ? foeTravel : 0}
+              rank={index}
+              walkMs={walkMs}
+              walking={foeWalking}
+              engaged={engaged.has(index)}
+              // La mesure du contact se fait sur le premier encore debout.
+              boxRef={index === frontIndex ? foeBoxRef : undefined}
+            />
+          ),
+        )}
       </div>
 
       {/* Un ennemi à distance projette, puisqu'il ne s'approche jamais. */}
       {foeStyle === 'ranged' && (
         <Projectiles distance={gap} swings={store.foeSwings[scope]} color="#9ad6c0" />
       )}
-
-      {/* Vague à plusieurs : ceux qui tiennent au contact frappent en même temps
-          que le premier ; ceux qui n'ont pas de place patientent en retrait. */}
-      {extras.map(({ enemy, index }, i) => (
-        <ExtraFoe
-          scope={scope}
-          key={index}
-          enemy={enemy}
-          index={index}
-          wave={`${c.district}-${c.wave}`}
-          engaged={engaged.has(index)}
-          // Tout le monde entre par la droite. Celui qui a une place au contact
-          // marche presque aussi loin que le premier et vient se coller à lui —
-          // leurs boîtes de collision touchent donc le héros toutes les deux.
-          // Celui qui attend son tour ne bouge pas : il reste au bord droit.
-          travel={engaged.has(index) ? Math.max(0, foeTravel - 24) : 0}
-          // Léger décalage pour ceux qui attendent : juste de quoi ne pas se
-          // superposer, sans quitter le bord droit.
-          offset={engaged.has(index) ? 0 : -i * 14}
-          walkMs={walkMs}
-          walking={foeWalking}
-          hidden={between}
-        />
-      ))}
     </div>
   );
 }
@@ -348,69 +310,80 @@ function foeAnim(walking: boolean, striking: boolean, hit: boolean): string {
 }
 
 /**
- * Ennemi en surnombre. Il entre par la droite comme les autres, puis :
+ * Un ennemi de la vague, à son rang. Tous entrent par la droite et couvrent la
+ * même distance, donc la file arrive en formation ; l'écart vient du rang, pas
+ * de l'ordre des vivants, si bien qu'une mort ne déplace personne.
  *
- * - s'il a une place au contact, il marche jusqu'au héros et frappe avec le
- *   premier — sa boîte de collision touche celle du héros elle aussi ;
- * - sinon il patiente au bord droit, un peu effacé, et n'infliger rien tant
- *   qu'une place ne se libère pas.
+ * Il ne frappe que si le moteur lui accorde une place au contact
+ * (`engagedEnemies`) : ceux qui font la queue attendent sans infliger de dégâts.
  */
-function ExtraFoe({
+function FoeUnit({
   scope,
   enemy,
   index,
-  offset,
+  rank,
   travel,
   walkMs,
   walking,
   wave,
   engaged,
-  hidden,
+  hero,
+  cycled,
+  guardian,
+  boxRef,
 }: {
   scope: FightScope;
   enemy: { hp: number; maxHp: number; sprite: string; name: string };
   index: number;
-  /** Écart de départ, au bord droit, pour ne pas se superposer aux autres. */
-  offset: number;
-  /** Distance à couvrir vers la gauche ; zéro s'il attend son tour. */
+  /** Place dans la file : décale le point de départ vers la droite. */
+  rank: number;
   travel: number;
   walkMs: number;
   walking: boolean;
-  /** Change à chaque vague : relance l'animation d'entrée. */
   wave: string;
-  /** Au contact : il frappe avec les autres. Sinon il attend, et ne fait rien. */
   engaged: boolean;
-  hidden: boolean;
+  hero: string;
+  cycled: boolean;
+  guardian: boolean;
+  /** Fourni pour celui qui sert de référence à la mesure du contact. */
+  boxRef?: React.RefObject<HTMLDivElement | null>;
 }) {
   useGame();
+  const sprite = enemy.sprite === 'self' ? hero : enemy.sprite;
+  const ranged = spriteStyle(sprite) === 'ranged';
+  // Chaque ennemi ne flashe que sur les coups qui le visent.
   const lastHit = [...store.hits[scope]].reverse().find((h) => h.targetIndex === index);
   const hit = usePulse(lastHit?.id ?? 0, 150);
-  // Les ennemis au contact frappent ensemble : ils suivent donc le même compteur
-  // de salves que celui de devant.
+  // Ceux qui sont au contact frappent ensemble : même compteur de salves.
   const striking = usePulse(store.foeSwings[scope], 220) && engaged;
+  const jolt = -((striking ? 7 : 0) - (hit ? 5 : 0));
+
   return (
-    <div
-      className={`fighter-slot foe extra ${engaged ? '' : 'waiting'} ${hidden ? 'gone' : ''}`}
-      style={{ transform: `translateX(${offset}px)` }}
-    >
-    <div
-      key={`${wave}-${engaged}`}
-      className={`mover ${travel > 0 ? 'approaching' : ''}`}
-      style={{
-        ['--to' as string]: `${-travel}px`,
-        animationDuration: `${walkMs}ms`,
-        transform: travel > 0 ? undefined : 'translateX(0)',
-      }}
-    >
-      <Sprite
-        character={enemy.sprite === 'self' ? DEFAULT_CHARACTER : enemy.sprite}
-        anim={hit ? 'hurt' : striking ? 'attack' : walking && travel > 0 ? 'walk' : 'idle'}
-        fallbackAnim={['idle']}
-        flip
-        className={hit ? 'flash' : ''}
-      />
-      {hit && <span className="impact" aria-hidden="true" />}
-    </div>
+    <div className="foe-unit" style={{ transform: `translateX(${rank * FILE_SPACING}px)` }}>
+      <div
+        key={wave}
+        className={`mover ${travel > 0 ? 'approaching' : ''}`}
+        style={{
+          ['--to' as string]: `${-travel}px`,
+          animationDuration: `${walkMs}ms`,
+          transform: travel > 0 ? undefined : 'translateX(0)',
+        }}
+      >
+        <div ref={boxRef} className="lunge" style={{ transform: `translateX(${jolt}px)` }}>
+          <Sprite
+            character={sprite}
+            anim={foeAnim(walking && travel > 0, striking, hit)}
+            fallbackAnim={['idle']}
+            scale={guardian ? 1.3 : 1}
+            flip
+            className={`foe enter ${cycled ? 'cycled' : ''} ${ranged ? 'flyer' : ''} ${
+              hit ? 'flash' : ''
+            } ${engaged ? '' : 'waiting'}`}
+          />
+        </div>
+        {hit && <span className="impact" aria-hidden="true" />}
+        <FloatingHits scope={scope} target={index} />
+      </div>
     </div>
   );
 }
@@ -596,11 +569,13 @@ function TakenHits({ scope }: { scope: FightScope }) {
 }
 
 /** Chiffres de dégâts : montée + fondu, critiques 1,4× et en jaune (§3). */
-function FloatingHits({ scope }: { scope: FightScope }) {
+function FloatingHits({ scope, target }: { scope: FightScope; target?: number }) {
   useGame();
   return (
     <div className="hits" aria-hidden="true">
-      {store.hits[scope].map((h) => (
+      {store.hits[scope]
+        .filter((h) => target === undefined || h.targetIndex === target)
+        .map((h) => (
         <span
           key={h.id}
           className={`hit ${h.crit ? 'crit' : ''}`}

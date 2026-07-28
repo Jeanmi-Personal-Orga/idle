@@ -6,6 +6,7 @@ import {
   makeEnemies,
   newGame,
   pushLog,
+  refreshDaily,
   refreshKeys,
   today,
   startRandomDistillation,
@@ -67,8 +68,10 @@ class GameStore {
   constructor() {
     this.state = load() ?? newGame();
     applyOffline(this.state);
-    // Les clés reviennent même si la partie est restée ouverte toute la nuit.
+    // Les clés et le tableau du jour reviennent même si la partie est restée
+    // ouverte toute la nuit.
     refreshKeys(this.state);
+    refreshDaily(this.state);
   }
 
   subscribe = (fn: () => void) => {
@@ -214,6 +217,8 @@ class GameStore {
     const migrated = migrate(state);
     this.state = migrated ?? newGame();
     applyOffline(this.state);
+    refreshKeys(this.state);
+    refreshDaily(this.state);
     this.notify();
   }
 
@@ -328,6 +333,14 @@ export function migrate(save: GameState): GameState | null {
     // v15 : temps mort entre les vagues.
     save.combat.interlude = 0;
     save.version = 15;
+  }
+  if (save.version === 15) {
+    // v16 : missions du jour. Le tableau est retiré au sort au chargement
+    // (`refreshDaily`), donc un tableau vide suffit ici ; une mission en cours
+    // appartenait à l'ancien système, on la laisse tomber.
+    save.daily = { day: '', missions: [], bonusPaid: false };
+    save.mission = null;
+    save.version = 16;
   }
   return save.version === SAVE_VERSION ? save : null;
 }
