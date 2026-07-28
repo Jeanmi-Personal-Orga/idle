@@ -3,7 +3,8 @@ import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
 import {
   districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
 import { WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
-import { BACKGROUND_LAYERS } from '../game/sprites';
+import { BACKGROUND_LAYERS, spriteSize } from '../game/sprites';
+import { EDGE, arenaLayout, fileSpacing } from './arena-geometry';
 import { store, useGame } from '../game/store';
 import type { Enemy, Hero } from '../game/types';
 import type { FightScope } from '../game/engine';
@@ -35,19 +36,7 @@ import { Sprite } from './Sprite';
  * de frappe, le déplacement les suit sans changer aucun résultat.
  */
 
-/**
- * Écart laissé entre les deux rectangles quand on est au contact : quelques
- * pixels, pour qu'ils se touchent presque sans se chevaucher.
- *
- * La boîte de collision est **le rectangle du sprite**, ni plus ni moins. C'est
- * la même règle pour tout le monde, donc prévisible ; en échange, l'écart visible
- * entre les corps dépend de la marge transparente de chaque planche.
- */
-const CONTACT_GAP = 4;
 
-
-/** Écart entre deux rangs de la file : assez serré pour que la vague reste groupée. */
-const FILE_SPACING = 30;
 
 
 export function Arena({
@@ -107,12 +96,9 @@ export function Arena({
   const dead = c.reviving > 0;
 
   const arenaRef = useRef<HTMLDivElement>(null);
-  // Boîtes de collision réelles, mesurées à l'écran.
-  const heroBoxRef = useRef<HTMLDivElement>(null);
-  const foeBoxRef = useRef<HTMLDivElement>(null);
-  // On mesure les **sprites** eux-mêmes, pas leurs emplacements : ceux des
-  // ennemis n'ont aucune largeur (leurs rangs sont en position absolue).
-  const gap = useGap(arenaRef, heroBoxRef, foeBoxRef, [c.district, c.wave, hero, foe]);
+  // Seule chose lue à l'écran : la largeur de la scène. Tout le placement en
+  // découle par le calcul (voir arena-geometry.ts).
+  const arenaWidth = useArenaWidth(arenaRef);
 
   // Même vitesse de déplacement pour tout le monde. Une arme de mêlée envoie le
   // héros à sa marque, à mi-distance, et il y reste : les vagues suivantes
@@ -125,10 +111,15 @@ export function Arena({
   //   **tout** le chemin, il va la chercher sous le nez ;
   // - héros à distance : il ne bouge pas, l'ennemi traverse.
   const heroShare = heroStyle === 'melee' ? (foeStyle === 'melee' ? 0.5 : 1) : 0;
-  // Plus de bonus par mort : les ennemis viennent maintenant au contact les uns
-  // après les autres, le héros n'a plus besoin d'avancer pour les chercher.
-  const heroTravel = gap * heroShare;
-  const foeTravel = foeStyle === 'melee' ? gap - gap * heroShare : 0;
+  // Largeurs des sprites, calculées depuis le catalogue : c'est ce qui rend le
+  // placement exact sans rien mesurer.
+  const heroWidth = spriteSize(hero).width;
+  const foeWidth = spriteSize(foe, guardian && c.enemies.length === 1 ? 1.3 : 1).width;
+  const layout = arenaLayout(arenaWidth, heroWidth, foeWidth, heroShare);
+  const heroTravel = layout.heroTravel;
+  const foeTravel = foeStyle === 'melee' ? layout.foeTravel : 0;
+  // Sortie de scène entre deux vagues : jusqu'au bord droit, derrière l'ennemi.
+  const exitTravel = Math.max(0, arenaWidth - EDGE - heroWidth - layout.heroLeft);
   // La marche dure exactement l'approche accordée par le moteur, et se joue
   // pendant son décompte : à l'arrivée, les coups partent.
   const walkMs = between ? WAVE_PAUSE * 1000 : Math.max(120, closingTime(state) * 1000);
@@ -148,25 +139,17 @@ export function Arena({
   // Comme l'ennemi, il part **toujours de sa marque** et s'anime vers sa cible :
   // une transition l'aurait fait reculer en glissant à la fin du temps mort, au
   // lieu de réapparaître à gauche sur la nouvelle scène.
-  const heroAt = dead ? 0 : between ? gap : heroTravel;
+  const heroAt = dead ? 0 : between ? exitTravel : heroTravel;
   // Le noir couvre la coupure : il tombe pendant que le héros finit sa sortie,
   // et se lève sur la scène remise à zéro. C'est lui qui autorise le
   // repositionnement instantané des deux camps.
   const resuming = useFalling(between, 500);
-  // Contact réel : c'est lui qui autorise les coups au corps à corps, côté
-  // moteur comme à l'écran. Il tombe à faux dès qu'une nouvelle vague se lève,
-  // et repasse à vrai à l'instant où les deux boîtes se touchent.
-  const touching = useContact(heroBoxRef, foeBoxRef, scope, {
-    active: !between && !dead && Boolean(front),
-    // Filet de sécurité : la marche accordée par le moteur est écoulée. Si les
-    // boîtes ne se rejoignent pas — mesure impossible, mise en page inattendue —
-    // on ne bloque pas le combat pour autant.
-    walkDone: (c.closing ?? 0) <= 0,
-  });
-  // On marche tant que les boîtes ne se touchent pas : l'animation de marche
-  // s'arrête donc à l'instant du contact, pas à la fin d'un chrono.
-  const heroWalking = (walking && !touching && heroTravel > 0) || between;
-  const foeWalking = walking && !touching && foeTravel > 0;
+  // Plus de détection de collision à l'écran : la marche s'achève **exactement**
+  // au contact, puisque sa distance est calculée pour cela. Le décompte du moteur
+  // (`closing`) et l'animation partagent la même durée, donc l'instant où les
+  // coups partent est aussi celui de l'arrivée.
+  const heroWalking = (walking && heroTravel > 0) || between;
+  const foeWalking = walking && foeTravel > 0;
 
   // Les à-coups de combat vivent sur leur propre couche : ils ne touchent plus à
   // la position de marche.
@@ -208,7 +191,7 @@ export function Arena({
         </span>
       </div>
 
-      <div className="fighter-slot hero">
+      <div className="fighter-slot hero" style={{ left: layout.heroLeft }}>
         {/*
           Deux couches, comme pour l'ennemi : `mover` porte la marche — longue et
           linéaire —, `lunge` porte les à-coups de frappe et de recul, courts et
@@ -229,7 +212,6 @@ export function Arena({
           }}
         >
           <div
-            ref={heroBoxRef}
             className="lunge"
             style={{ transform: `translateX(${heroJolt}px)` }}
           >
@@ -252,7 +234,10 @@ export function Arena({
         celui de devant tombe, les autres **ne bougent pas** — ils restent où ils
         sont et frappent de là, dès que le moteur leur donne une place au contact.
       */}
-      <div className={`fighter-slot foe ${between || !front ? 'gone' : ''}`}>
+      <div
+        className={`fighter-slot foe ${between || !front ? 'gone' : ''}`}
+        style={{ left: layout.foeLeft }}
+      >
         {c.enemies.map((enemy, index) =>
           enemy.hp <= 0 ? null : (
             <FoeUnit
@@ -274,11 +259,10 @@ export function Arena({
                   : 0
               }
               rank={index}
+              spacing={fileSpacing(foeWidth)}
               walkMs={walkMs}
               walking={foeWalking}
               engaged={engaged.has(index)}
-              // La mesure du contact se fait sur le premier encore debout.
-              boxRef={index === frontIndex ? foeBoxRef : undefined}
             />
           ),
         )}
@@ -286,7 +270,11 @@ export function Arena({
 
       {/* Un ennemi à distance projette, puisqu'il ne s'approche jamais. */}
       {foeStyle === 'ranged' && (
-        <Projectiles distance={gap} swings={store.foeSwings[scope]} color="#9ad6c0" />
+        <Projectiles
+          distance={layout.foeLeft - layout.heroLeft - heroWidth}
+          swings={store.foeSwings[scope]}
+          color="#9ad6c0"
+        />
       )}
     </div>
   );
@@ -335,7 +323,7 @@ function FoeUnit({
   hero,
   cycled,
   guardian,
-  boxRef,
+  spacing,
 }: {
   scope: FightScope;
   enemy: { hp: number; maxHp: number; sprite: string; name: string };
@@ -350,8 +338,8 @@ function FoeUnit({
   hero: string;
   cycled: boolean;
   guardian: boolean;
-  /** Fourni pour celui qui sert de référence à la mesure du contact. */
-  boxRef?: React.RefObject<HTMLDivElement | null>;
+  /** Écart entre deux rangs de la file, en pixels. */
+  spacing: number;
 }) {
   useGame();
   const sprite = enemy.sprite === 'self' ? hero : enemy.sprite;
@@ -364,7 +352,7 @@ function FoeUnit({
   const jolt = -((striking ? 7 : 0) - (hit ? 5 : 0));
 
   return (
-    <div className="foe-unit" style={{ transform: `translateX(${rank * FILE_SPACING}px)` }}>
+    <div className="foe-unit" style={{ transform: `translateX(${rank * spacing}px)` }}>
       <div
         key={wave}
         className={`mover ${travel > 0 ? 'approaching' : ''}`}
@@ -374,7 +362,7 @@ function FoeUnit({
           transform: travel > 0 ? undefined : 'translateX(0)',
         }}
       >
-        <div ref={boxRef} className="lunge" style={{ transform: `translateX(${jolt}px)` }}>
+        <div className="lunge" style={{ transform: `translateX(${jolt}px)` }}>
           <Sprite
             character={sprite}
             anim={foeAnim(walking && travel > 0, striking, hit)}
@@ -410,61 +398,6 @@ function usePulse(counter: number, ms: number): boolean {
 }
 
 /**
- * Vrai quand les deux rectangles sont côte à côte, à `CONTACT_GAP` près : le
- * bord droit du héros a rejoint le bord gauche de l'ennemi.
- */
-function withinReach(hero: HTMLElement, foe: HTMLElement): boolean {
-  return hero.getBoundingClientRect().right + CONTACT_GAP >= foe.getBoundingClientRect().left;
-}
-
-/**
- * Contact entre deux boîtes de collision, mesuré à chaque image. Tant qu'elles
- * ne se chevauchent pas, le moteur n'autorise aucune attaque de mêlée : ce que
- * l'on voit et ce que la simulation applique ne peuvent plus diverger.
- *
- * Le résultat est poussé dans le moteur (`store.setContact`) et rendu au
- * composant. Au démontage on rend le contact : un combat ne doit pas se figer
- * parce qu'on a changé d'onglet.
- */
-function useContact(
-  a: React.RefObject<HTMLElement | null>,
-  b: React.RefObject<HTMLElement | null>,
-  scope: FightScope,
-  { active, walkDone }: { active: boolean; walkDone: boolean },
-): boolean {
-  const [touching, setTouching] = useState(false);
-  // Ces deux valeurs changent à chaque tick : on les lit dans la boucle par
-  // référence, sinon elle se relancerait dix fois par seconde.
-  const flags = useRef({ active, walkDone });
-  flags.current = { active, walkDone };
-
-  useEffect(() => {
-    let raf = 0;
-    let last: boolean | null = null;
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-      const ea = a.current;
-      const eb = b.current;
-      let value: boolean;
-      if (!flags.current.active) value = false;
-      else if (!ea || !eb) value = true;
-      else value = withinReach(ea, eb) || flags.current.walkDone;
-      if (value === last) return;
-      last = value;
-      store.setContact(scope, value);
-      setTouching(value);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(raf);
-      store.setContact(scope, true);
-    };
-  }, [a, b, scope]);
-
-  return touching;
-}
-
-/**
  * Vrai pendant `ms` après que `flag` soit repassé à faux. Sert au fondu qui se
  * lève : le temps mort est fini côté moteur, mais l'écran doit encore
  * s'éclaircir.
@@ -486,60 +419,25 @@ function useFalling(flag: boolean, ms: number): boolean {
 }
 
 /**
- * Abscisse de mise en page d'un élément dans un ancêtre, en remontant la chaîne
- * des `offsetParent`. On additionne des `offsetLeft`, qui **ignorent les
- * transforms** : la mesure ne dépend donc pas des déplacements en cours.
- *
- * C'est indispensable ici : les rangs ennemis sont positionnés en absolu dans un
- * emplacement de largeur nulle, donc mesurer l'emplacement plutôt que le sprite
- * donnait un écart faux d'une largeur de sprite entière — les combattants se
- * marchaient dessus.
+ * Largeur de la scène. C'est la **seule** chose lue dans le DOM : tout le reste du
+ * placement en découle par le calcul, ce qui évite de dépendre de quel élément
+ * porte quelle boîte — l'erreur qui a fait échouer trois corrections de suite.
  */
-function layoutLeft(el: HTMLElement, ancestor: HTMLElement | null): number {
-  let x = 0;
-  let node: HTMLElement | null = el;
-  while (node && node !== ancestor) {
-    x += node.offsetLeft;
-    node = node.offsetParent as HTMLElement | null;
-  }
-  return x;
-}
-
-/**
- * Distance qu'il reste à couvrir pour amener les deux rectangles côte à côte.
- * C'est le même calcul que `withinReach`, appliqué aux positions de repos : la
- * marche s'arrête donc exactement là où les coups deviennent possibles, sans
- * jamais dépasser.
- */
-function useGap(
-  arena: React.RefObject<HTMLDivElement | null>,
-  a: React.RefObject<HTMLDivElement | null>,
-  b: React.RefObject<HTMLDivElement | null>,
-  deps: unknown[],
-): number {
-  const [gap, setGap] = useState(0);
+function useArenaWidth(arena: React.RefObject<HTMLDivElement | null>): number {
+  const [width, setWidth] = useState(0);
 
   useLayoutEffect(() => {
-    const measure = () => {
-      const ea = a.current;
-      const eb = b.current;
-      const scene = arena.current;
-      if (!ea || !eb || !scene) return;
-      // Bord droit du sprite du héros contre bord gauche du sprite de l'ennemi.
-      const heroRight = layoutLeft(ea, scene) + ea.offsetWidth;
-      const foeLeft = layoutLeft(eb, scene);
-      setGap(Math.max(0, foeLeft - heroRight - CONTACT_GAP));
-    };
-    measure();
     const el = arena.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
+    if (!el) return;
+    const measure = () => setWidth(el.clientWidth);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [arena]);
 
-  return gap;
+  return width;
 }
 
 /** Projectiles d'un ennemi à distance, vers le héros. */

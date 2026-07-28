@@ -204,23 +204,31 @@ function LabCard({ state }: { state: ReturnType<typeof useGame> }) {
                 ? `Niveau ${LAB_MAX} : le laboratoire est au bout de ce qu'il peut devenir. La suite passe par une dissolution.`
                 : `Niveau ${state.labLevel} → ${state.labLevel + 1}`}
             </div>
-            <div className="grid2">
-              <div className="statline">
-                <span className="muted">Coût</span>
-                <b>{formatNum(labCost.essence)} ess</b>
+            {/* Au niveau maximum, ni coût ni durée : il n'y a plus rien à payer. */}
+            {state.labLevel < LAB_MAX && (
+              <div className="grid2">
+                <div className="statline">
+                  <span className="muted">Coût</span>
+                  <b>{formatNum(labCost.essence)} ess</b>
+                </div>
+                <div className="statline">
+                  <span className="muted">Durée</span>
+                  <b>{formatDuration(labUpgradeDuration(state.labLevel, state.ascension.count))}</b>
+                </div>
               </div>
-              <div className="statline">
-                <span className="muted">Durée</span>
-                <b>{formatDuration(labUpgradeDuration(state.labLevel, state.ascension.count))}</b>
-              </div>
-            </div>
+            )}
 
             {/* Ce que l'amélioration change vraiment : la pureté de ce qui sort
                 du chaudron. Avant / après, pour décider en connaissance. */}
             <div className="label">Puretés obtenues</div>
             <PurityOdds labLevel={state.labLevel} mods={mods} />
-            <div className="muted small">Après amélioration</div>
-            <PurityOdds labLevel={state.labLevel + 1} mods={mods} />
+            {/* Pas d'« après » quand il n'y a plus d'après. */}
+            {state.labLevel < LAB_MAX && (
+              <>
+                <div className="muted small">Après amélioration</div>
+                <PurityOdds labLevel={state.labLevel + 1} mods={mods} />
+              </>
+            )}
 
             {state.labUpgrading ? (
               <div className="row">

@@ -452,20 +452,15 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
     for (const e of c.enemies) e.cooldown = e.interval;
   }
 
-  // Boîtes de collision : tant qu'elles ne se touchent pas, personne ne frappe
-  // au corps à corps. C'est l'arène qui mesure (voir `store.setContact`) ; sans
-  // affichage — hors-ligne, simulation d'équilibrage — on considère le contact
-  // acquis, sinon la progression dépendrait de ce qui est à l'écran.
-  const touching = c.contact !== false;
-
-  // Une arme à distance n'a pas besoin du contact ; une arme de mêlée, si.
-  const heroCanHit = touching || heroIsRanged(state);
+  // Le contact est acquis dès que la marche d'approche est écoulée : l'arène cale
+  // la durée de l'animation sur ce même décompte et la distance sur l'écart réel,
+  // donc l'instant où les coups partent est aussi celui de l'arrivée. Plus rien
+  // n'est mesuré à l'écran, et la simulation ne dépend pas de l'affichage.
   // Frappes du héros : toujours sur le premier ennemi encore vivant.
-  if (heroCanHit) c.hero.cooldown -= dt;
-  else c.hero.cooldown = 0; // il marche encore : sa frappe reste prête pour le contact
+  c.hero.cooldown -= dt;
   const interval = attackInterval(s);
   let guard = 0;
-  while (heroCanHit && c.hero.cooldown <= 0 && guard++ < 20) {
+  while (c.hero.cooldown <= 0 && guard++ < 20) {
     const targetIndex = c.enemies.findIndex((e) => e.hp > 0);
     if (targetIndex < 0) break;
     const target = c.enemies[targetIndex];
@@ -505,11 +500,6 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
   for (let i = 0; i < c.enemies.length; i++) {
     const enemy = c.enemies[i];
     if (enemy.hp <= 0 || !engaged.has(i)) continue;
-    // Un ennemi de mêlée doit être au contact ; un tireur, non.
-    if (!touching && spriteStyle(enemy.sprite) !== 'ranged') {
-      enemy.cooldown = enemy.interval;
-      continue;
-    }
     enemy.cooldown -= dt;
     while (enemy.cooldown <= 0) {
       enemy.cooldown += enemy.interval;
@@ -621,14 +611,10 @@ function advanceMission(state: GameState, dt: number, rng: () => number, sink: E
     for (const e of m.enemies) e.cooldown = e.interval;
   }
 
-  // Mêmes boîtes de collision qu'en brume (voir advanceCombat).
-  const touching = m.contact !== false;
-  const heroCanHit = touching || heroIsRanged(state);
-  if (heroCanHit) m.hero.cooldown -= dt;
-  else m.hero.cooldown = 0;
+  m.hero.cooldown -= dt;
   const interval = attackInterval(s);
   let guard = 0;
-  while (heroCanHit && m.hero.cooldown <= 0 && guard++ < 20) {
+  while (m.hero.cooldown <= 0 && guard++ < 20) {
     const targetIndex = m.enemies.findIndex((e) => e.hp > 0);
     if (targetIndex < 0) break;
     const target = m.enemies[targetIndex];
@@ -655,10 +641,6 @@ function advanceMission(state: GameState, dt: number, rng: () => number, sink: E
   for (let i = 0; i < m.enemies.length; i++) {
     const enemy = m.enemies[i];
     if (enemy.hp <= 0 || !engaged.has(i)) continue;
-    if (!touching && spriteStyle(enemy.sprite) !== 'ranged') {
-      enemy.cooldown = enemy.interval;
-      continue;
-    }
     enemy.cooldown -= dt;
     while (enemy.cooldown <= 0) {
       enemy.cooldown += enemy.interval;

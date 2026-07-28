@@ -358,7 +358,12 @@ main {
   pointer-events: none;
 }
 
-/* Position de départ de chacun, pieds posés sur le sol. */
+/*
+ * Position de départ de chacun, pieds posés sur le sol. L'abscisse est posée par
+ * l'arène, en pixels : elle est calculée à partir de la largeur de la scène et de
+ * celle des sprites (voir arena-geometry.ts), pas laissée à un pourcentage — c'est
+ * ce qui garantit un écart de contact exact.
+ */
 .fighter-slot {
   position: absolute;
   bottom: 12px;
@@ -380,23 +385,14 @@ main {
   }
 }
 
-.fighter-slot.hero {
-  left: 6%;
-}
-
-/* Les ennemis entrent en scène tout à droite : c'est de là qu'ils avancent. */
-.fighter-slot.foe {
-  right: 3%;
-}
-
 /*
- * Un rang de la file ennemie. Position absolue et empilée sur le même bord droit
- * que le slot : c'est le rang qui décale, pas le flux, donc une mort ne pousse
- * personne.
+ * Un rang de la file ennemie, empilé sur le bord gauche de l'emplacement : c'est
+ * le rang qui décale vers la droite, donc une mort ne pousse personne.
  */
+
 .foe-unit {
   position: absolute;
-  right: 0;
+  left: 0;
   bottom: 0;
 }
 

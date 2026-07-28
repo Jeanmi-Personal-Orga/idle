@@ -120,6 +120,18 @@ export function spriteHeight(id: string): number {
   return 104; // ennemis animés : bandes de 64 px de haut
 }
 
+/**
+ * Taille d'affichage d'un sprite, en pixels — **calculée**, pas mesurée. C'est ce
+ * qui permet de placer les combattants à l'arithmétique plutôt qu'en interrogeant
+ * le DOM : trois tentatives de mesure de suite se sont trompées d'une largeur de
+ * sprite, faute de savoir quel élément portait réellement la boîte.
+ */
+export function spriteSize(id: string, scale = 1): { width: number; height: number } {
+  const cell = SPRITES[id]?.idle.cell ?? [32, 32];
+  const zoom = (spriteHeight(id) / cell[1]) * scale;
+  return { width: cell[0] * zoom, height: cell[1] * zoom };
+}
+
 export function animData(id: string, wanted: string[]): SpriteAnim | null {
   const set = SPRITES[id];
   if (!set) return null;
