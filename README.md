@@ -192,6 +192,20 @@ npm run lint
 npm run smoke    # monte l'app dans un DOM sans navigateur et visite les 5 onglets
 ```
 
+### Boîtes de collision mesurées dans les images
+
+`node scripts/hitboxes.mjs` décode les planches de sprites (zlib, sans
+dépendance) et calcule, pour chaque créature, la part de vide à gauche et à
+droite de son dessin. Le résultat se recopie dans `HITBOX_INSETS`
+(`src/game/sprites.ts`), d'où l'arène tire le bord avant de chaque combattant.
+
+Il a fallu mesurer parce que les marges n'ont rien de commun : 0 % pour un slime,
+qui touche les deux bords de sa case, 23 % pour une chauve-souris, 35 % à gauche
+pour un squelette dessiné dans 96 px. Un pourcentage unique donnait des mobs qui
+frappaient à distance et d'autres qui se traversaient.
+
+À relancer si une planche change ou si une créature est ajoutée.
+
 ### Le test de fumée, et pourquoi il existe
 
 `npm run smoke` monte l'application entière dans un DOM sans navigateur (jsdom),
