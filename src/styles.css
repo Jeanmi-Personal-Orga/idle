@@ -1734,3 +1734,69 @@ nav .icon {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
+/* --- Boîtes de collision, à la demande (bouton ▣ de l'arène) --- */
+
+.hitbox-toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 6;
+  padding: 0 5px;
+  min-height: 0;
+  line-height: 1.4;
+  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(10, 13, 20, 0.55);
+  color: var(--muted);
+}
+
+.arena.debug-hitbox .hitbox-toggle {
+  color: var(--essence);
+  border-color: var(--essence);
+}
+
+/* La boîte de collision **est** le rectangle du sprite : on le trace tel quel. */
+.arena.debug-hitbox .sprite-box {
+  outline: 1px solid rgba(79, 214, 160, 0.9);
+  outline-offset: 0;
+}
+
+/* Le héros en vert, l'ennemi en ambre, pour les distinguer quand ils se croisent. */
+.arena.debug-hitbox .foe .sprite-box {
+  outline-color: rgba(214, 139, 63, 0.9);
+}
+
+.hitbox-guides {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Marques d'arrivée : où chacun doit s'arrêter. */
+.hitbox-guides .mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(79, 214, 160, 0.55);
+}
+
+.hitbox-guides .mark.foe-stop {
+  background: rgba(214, 139, 63, 0.55);
+}
+
+.hitbox-readout {
+  position: absolute;
+  left: 4px;
+  bottom: 2px;
+  font-size: 9.5px;
+  line-height: 1.3;
+  color: #cfd9e4;
+  background: rgba(10, 13, 20, 0.6);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}

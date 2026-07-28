@@ -4,7 +4,8 @@ import {
   districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
 import { WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
 import { BACKGROUND_LAYERS, spriteSize } from '../game/sprites';
-import { EDGE, arenaLayout, fileSpacing } from './arena-geometry';
+import { CONTACT_GAP, EDGE, arenaLayout, fileSpacing } from './arena-geometry';
+import { toggleHitboxes, useHitboxes } from './debug';
 import { store, useGame } from '../game/store';
 import type { Enemy, Hero } from '../game/types';
 import type { FightScope } from '../game/engine';
@@ -96,6 +97,7 @@ export function Arena({
   const dead = c.reviving > 0;
 
   const arenaRef = useRef<HTMLDivElement>(null);
+  const showHitboxes = useHitboxes();
   // Seule chose lue à l'écran : la largeur de la scène. Tout le placement en
   // découle par le calcul (voir arena-geometry.ts).
   const arenaWidth = useArenaWidth(arenaRef);
@@ -156,7 +158,10 @@ export function Arena({
   const heroJolt = (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
 
   return (
-    <div className={`arena ${heroHit ? 'shaken' : ''}`} ref={arenaRef}>
+    <div
+      className={`arena ${heroHit ? 'shaken' : ''} ${showHitboxes ? 'debug-hitbox' : ''}`}
+      ref={arenaRef}
+    >
       {/* Décor en cinq couches, de la plus lointaine à la plus proche. */}
       {BACKGROUND_LAYERS.map((src, i) => (
         <div
@@ -190,6 +195,31 @@ export function Arena({
           {c.wave === c.waves && ' · gardien'}
         </span>
       </div>
+
+      {/* Boîtes de collision à la demande : la géométrie étant calculée, pouvoir
+          la regarder vaut mieux que la déduire. Le réglage vit hors de la
+          sauvegarde (voir debug.ts). */}
+      <button
+        className="hitbox-toggle"
+        title={showHitboxes ? 'Masquer les boîtes de collision' : 'Afficher les boîtes de collision'}
+        onClick={toggleHitboxes}
+      >
+        ▣
+      </button>
+
+      {showHitboxes && (
+        <div className="hitbox-guides" aria-hidden="true">
+          {/* Ligne de contact : là où s'arrête le bord droit du héros, et le bord
+              gauche de l'ennemi six pixels plus loin. */}
+          <i className="mark hero-stop" style={{ left: layout.heroLeft + heroWidth + heroTravel }} />
+          <i className="mark foe-stop" style={{ left: layout.foeLeft - foeTravel }} />
+          <span className="hitbox-readout">
+            scène {Math.round(arenaWidth)} · héros {Math.round(heroWidth)} +{' '}
+            {Math.round(heroTravel)} · ennemi {Math.round(foeWidth)} + {Math.round(foeTravel)} ·
+            écart {CONTACT_GAP}
+          </span>
+        </div>
+      )}
 
       <div className="fighter-slot hero" style={{ left: layout.heroLeft }}>
         {/*
