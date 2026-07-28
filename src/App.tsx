@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Pressable, StatusBar, Text, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatNum } from './game/engine';
 import { heroStats, powerScore } from './game/formulas';
 import { RESOURCES, type ResourceId } from './game/resources';
 import { ResourceTicker } from './ui/ResourceTicker';
 import { useGame, useGameLoop } from './game/store';
+import { hydrate } from './game/storage';
 import { BrumeView } from './ui/BrumeView';
 import { TechView } from './ui/TechView';
 import { CampaignView } from './ui/CampaignView';
@@ -14,6 +17,8 @@ import { AuthScreen } from './ui/AuthScreen';
 import { hasUnlockedAscension, shardGain } from './game/ascension';
 import { authStore, hasSkippedAuth, useAuth } from './game/auth';
 import type { GameState } from './game/types';
+import { C, S } from './ui/theme';
+import { Button } from './ui/kit';
 
 type Tab = 'brume' | 'camp' | 'tech' | 'shop' | 'ascend';
 
@@ -28,9 +33,8 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 /**
- * Les ressources tardives ne s'affichent qu'une fois obtenues : un débutant n'a
- * pas à se demander à quoi servent des reliques qu'il ne verra pas avant des
- * heures.
+ * Les ressources tardives ne s'affichent qu'une fois obtenues : un débutant n'a pas
+ * à se demander à quoi servent des reliques qu'il ne verra pas avant des heures.
  */
 function visibleResource(state: GameState, id: ResourceId): boolean {
   if (id === 'shard') return state.resources.shard > 0 || state.ascension.count > 0;
@@ -38,106 +42,170 @@ function visibleResource(state: GameState, id: ResourceId): boolean {
   return true;
 }
 
-/** L'ancre de l'URL choisit l'onglet initial : #tech, #shop, #ascend. */
-function initialTab(): Tab {
-  const hash = location.hash.slice(1) as Tab;
-  return TABS.some((t) => t.id === hash) ? hash : 'brume';
+/**
+ * Racine de l'application.
+ *
+ * Le stockage natif étant asynchrone, on l'attend avant de rendre quoi que ce soit
+ * (`hydrate`) : sans ça, le premier rendu se ferait sur une partie vierge et
+ * écraserait la sauvegarde de l'appareil.
+ */
+export default function App() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    void hydrate().then(() => setReady(true));
+  }, []);
+
+  if (!ready) {
+    return (
+      <SafeAreaProvider>
+        <View style={[S.screen, { alignItems: 'center', justifyContent: 'center' }]}>
+          <StatusBar barStyle="light-content" />
+          <Text style={S.muted}>La brume se lève…</Text>
+        </View>
+      </SafeAreaProvider>
+    );
+  }
+
+  return (
+    <SafeAreaProvider>
+      <Game />
+    </SafeAreaProvider>
+  );
 }
 
-export default function App() {
+/**
+ * Cadre d'écran : applique les marges système à la main. `SafeAreaView` aurait
+ * suffi, mais son composant manque au mock de test — et un simple `View` avec les
+ * encoches en padding se teste sans rien simuler.
+ */
+function Screen({ children }: { children: React.ReactNode }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[S.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <StatusBar barStyle="light-content" />
+      {children}
+    </View>
+  );
+}
+
+function Game() {
   useGameLoop();
   const state = useGame();
   const session = useAuth();
-  const [tab, setTab] = useState<Tab>(initialTab);
-  // Un skip explicite tient jusqu'au reload suivant ; se reconnecter (via le
-  // bouton d'en-tête) rouvre l'écran sans attendre un rechargement.
+  const [tab, setTab] = useState<Tab>('brume');
+  // Un saut explicite tient jusqu'au relancement ; se reconnecter (via le bouton
+  // d'en-tête) rouvre l'écran sans attendre.
   const [authDismissed, setAuthDismissed] = useState(() => hasSkippedAuth());
   const [showAuth, setShowAuth] = useState(false);
 
-  // Écran de connexion d'abord (sauf déjà connecté ou déjà sauté) : une
-  // sauvegarde cloud existante doit primer sur l'écran de choix de personnage,
-  // pas l'inverse.
+  // Écran de connexion d'abord (sauf déjà connecté ou déjà sauté) : une sauvegarde
+  // cloud existante doit primer sur l'écran de choix de personnage, pas l'inverse.
   if ((!session && !authDismissed) || showAuth) {
     return (
-      <div className="app">
+      <Screen>
         <AuthScreen
           onDone={() => {
             setAuthDismissed(true);
             setShowAuth(false);
           }}
         />
-      </div>
+      </Screen>
     );
   }
 
   // Première chose que voit un nouveau joueur : qui il incarne.
   if (!state.character) {
     return (
-      <div className="app">
+      <Screen>
         <CharacterSelect />
-      </div>
+      </Screen>
     );
   }
 
   return (
-    <div className="app">
-      <header>
-        <div className="header-top">
-          <div className="title">L'Alchimiste de Brume</div>
-          {/* La puissance totale se lit à côté du compte : c'est le résumé de
-              tout ce qu'on possède, pas une donnée de combat. */}
-          <div className="power-badge" title="Puissance totale">
+    <Screen>
+      <View style={{ paddingHorizontal: 14, paddingTop: 8, paddingBottom: 8, gap: 8, borderBottomWidth: 1, borderBottomColor: C.line }}>
+        <View style={[S.row, S.between]}>
+          <Text style={{ color: C.fg, fontSize: 14, fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
+            L'Alchimiste de Brume
+          </Text>
+          {/* La puissance totale se lit à côté du compte : c'est le résumé de tout
+              ce qu'on possède, pas une donnée de combat. */}
+          <Text style={{ color: C.catalyst, fontWeight: '700', fontSize: 13 }}>
             ★ {formatNum(powerScore(heroStats(state)))}
-          </div>
+          </Text>
           {session ? (
-            <div className="muted small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {session.user.username}
-              <button className="ghost" onClick={() => authStore.logout()}>
-                Déconnexion
-              </button>
-            </div>
+            <View style={[S.row, { gap: 6 }]}>
+              <Text style={[S.muted, S.small]} numberOfLines={1}>
+                {session.user.username}
+              </Text>
+              <Button tone="ghost" onPress={() => authStore.logout()}>
+                <Text style={[S.muted, S.small]}>Sortir</Text>
+              </Button>
+            </View>
           ) : (
-            <button className="ghost" onClick={() => setShowAuth(true)}>
-              Se connecter
-            </button>
+            <Button tone="ghost" onPress={() => setShowAuth(true)}>
+              <Text style={[S.muted, S.small]}>Se connecter</Text>
+            </Button>
           )}
-        </div>
-        {/* Une seule source de vérité pour les ressources : leur nom, leur icône
-            et ce à quoi elles servent viennent de `resources.ts`. */}
-        <div className="resources">
+        </View>
+
+        {/* Une seule source de vérité pour les ressources : leur nom, leur icône et
+            ce à quoi elles servent viennent de `resources.ts`. */}
+        <View style={[S.row, S.between, { flexWrap: 'wrap', rowGap: 4 }]}>
           {RESOURCES.filter((r) => visibleResource(state, r.id)).map((r) => (
             <ResourceTicker key={r.id} id={r.id} />
           ))}
-        </div>
-      </header>
+        </View>
+      </View>
 
-      <main>
+      <View style={{ flex: 1 }}>
         {tab === 'brume' && <BrumeView />}
         {tab === 'camp' && <CampaignView />}
         {tab === 'tech' && <TechView />}
         {tab === 'shop' && <ShopView />}
         {tab === 'ascend' && <AscendView />}
-      </main>
+      </View>
 
-      <nav>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={tab === t.id ? 'active' : ''}
-            onClick={() => {
-              setTab(t.id);
-              history.replaceState(null, '', `#${t.id}`);
-            }}
-          >
-            <span className="icon">{t.icon}</span>
-            {t.label}
-            {t.id === 'ascend' && hasUnlockedAscension(state) && shardGain(state) > 0 && (
-              <em className="badge shard" />
-            )}
-          </button>
-        ))}
-      </nav>
-
-    </div>
+      <View
+        style={{
+          flexDirection: 'row',
+          borderTopWidth: 1,
+          borderTopColor: C.line,
+          backgroundColor: '#10161f',
+        }}
+      >
+        {TABS.map((t) => {
+          const active = tab === t.id;
+          const badge = t.id === 'ascend' && hasUnlockedAscension(state) && shardGain(state) > 0;
+          return (
+            <Pressable
+              key={t.id}
+              onPress={() => setTab(t.id)}
+              style={{ flex: 1, alignItems: 'center', paddingVertical: 8, gap: 2 }}
+            >
+              <Text style={{ fontSize: 16, color: active ? C.fg : C.muted }}>{t.icon}</Text>
+              <Text style={{ fontSize: 10.5, color: active ? C.fg : C.muted }} numberOfLines={1}>
+                {t.label}
+              </Text>
+              {badge && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 6,
+                    right: '28%',
+                    width: 7,
+                    height: 7,
+                    borderRadius: 4,
+                    backgroundColor: C.shard,
+                  }}
+                />
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+    </Screen>
   );
 }

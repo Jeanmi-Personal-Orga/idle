@@ -1,14 +1,17 @@
 import { useState } from 'react';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { CHARACTERS, type CharacterId } from '../game/characters';
 import { authStore, skipAuth } from '../game/auth';
 import { chooseCharacter } from '../game/engine';
 import { store } from '../game/store';
 import { Sprite } from './Sprite';
+import { Button, Card, Muted } from './kit';
+import { C, S } from './theme';
 
 /**
- * Écran de connexion/inscription. Skippable à tout moment — c'est un jeu
- * solo hobby, imposer un compte serait hostile. Réapparaît via le bouton
- * « Se connecter » de l'en-tête pour qui a sauté cette étape et change d'avis.
+ * Écran de connexion/inscription. On peut toujours l'ignorer — c'est un jeu solo,
+ * imposer un compte serait hostile. Il réapparaît via « Se connecter » dans
+ * l'en-tête, pour qui a sauté l'étape et change d'avis.
  */
 export function AuthScreen({ onDone }: { onDone: () => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -21,8 +24,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
   // pour savoir qui il incarne.
   const [picked, setPicked] = useState<CharacterId>(CHARACTERS[0].id);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async () => {
     setError(null);
     setBusy(true);
     try {
@@ -44,88 +46,138 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <div className="intro">
-      <div className="intro-head">
-        <h1>L'Alchimiste de Brume</h1>
-        <p className="muted">
-          Connecte-toi pour retrouver ta partie sur n'importe quel appareil, ou
-          continue sans compte — tout reste jouable en local.
-        </p>
-      </div>
+    <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
+      <View style={{ gap: 6 }}>
+        <Text style={{ color: C.fg, fontSize: 21, fontWeight: '700' }}>L'Alchimiste de Brume</Text>
+        <Muted>
+          Connecte-toi pour retrouver ta partie sur n'importe quel appareil, ou continue
+          sans compte — tout reste jouable sur l'appareil.
+        </Muted>
+      </View>
 
-      <div className="card intro-detail">
-        <div className="branch-tabs">
-          <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">
-            Connexion
-          </button>
-          <button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')} type="button">
-            Créer un compte
-          </button>
-        </div>
+      <Card>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(['login', 'register'] as const).map((m) => (
+            <Pressable
+              key={m}
+              onPress={() => setMode(m)}
+              style={[
+                S.button,
+                { flex: 1 },
+                mode === m ? { borderColor: C.essence } : S.buttonGhost,
+              ]}
+            >
+              <Text style={[S.buttonText, mode === m && { color: C.essence }]}>
+                {m === 'login' ? 'Connexion' : 'Créer un compte'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
-        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {mode === 'register' && (
-            <>
-              <input
-                placeholder="Nom d'utilisateur"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                required
-              />
+        {mode === 'register' && (
+          <>
+            <Field
+              placeholder="Nom d'utilisateur"
+              value={username}
+              onChange={setUsername}
+              autoComplete="username"
+            />
+            <Muted>Qui descend dans la brume ?</Muted>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {CHARACTERS.map((c) => (
+                <Pressable
+                  key={c.id}
+                  onPress={() => setPicked(c.id)}
+                  style={[
+                    S.card,
+                    {
+                      flexGrow: 1,
+                      flexBasis: '45%',
+                      alignItems: 'center',
+                      padding: 8,
+                      gap: 4,
+                      borderColor: picked === c.id ? C.essence : C.line,
+                    },
+                  ]}
+                >
+                  <Sprite character={c.id} anim="idle" scale={0.8} />
+                  <Text style={[S.text, S.small, { fontWeight: '600' }]}>{c.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Muted>{CHARACTERS.find((c) => c.id === picked)?.blurb}</Muted>
+          </>
+        )}
 
-              <div className="muted small">Qui descend dans la brume ?</div>
-              <div className="roster compact-roster">
-                {CHARACTERS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={`roster-card ${picked === c.id ? 'picked' : ''}`}
-                    onClick={() => setPicked(c.id)}
-                    aria-pressed={picked === c.id}
-                  >
-                    <Sprite character={c.id} anim="idle" scale={0.8} />
-                    <b>{c.name}</b>
-                  </button>
-                ))}
-              </div>
-              <div className="muted small">
-                {CHARACTERS.find((c) => c.id === picked)!.blurb}
-              </div>
-            </>
-          )}
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Mot de passe"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            required
-          />
-          {error && <div className="muted small">{error}</div>}
-          <button className="ascend" type="submit" disabled={busy}>
-            {mode === 'login' ? 'Se connecter' : 'Créer le compte'}
-          </button>
-        </form>
-      </div>
+        <Field
+          placeholder="Email"
+          value={email}
+          onChange={setEmail}
+          keyboardType="email-address"
+          autoComplete="email"
+        />
+        <Field
+          placeholder="Mot de passe"
+          value={password}
+          onChange={setPassword}
+          secure
+          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+        />
+        {error && <Muted>{error}</Muted>}
+        <Button tone="primary" disabled={busy} onPress={submit}>
+          {mode === 'login' ? 'Se connecter' : 'Créer le compte'}
+        </Button>
+      </Card>
 
-      <button
-        className="ghost"
-        onClick={() => {
+      <Button
+        tone="ghost"
+        onPress={() => {
           skipAuth();
           onDone();
         }}
       >
         Jouer sans compte
-      </button>
-    </div>
+      </Button>
+    </ScrollView>
+  );
+}
+
+/** Champ de saisie, au style du reste de l'interface. */
+function Field({
+  placeholder,
+  value,
+  onChange,
+  secure,
+  keyboardType,
+  autoComplete,
+}: {
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  secure?: boolean;
+  keyboardType?: 'default' | 'email-address';
+  autoComplete?: 'username' | 'email' | 'current-password' | 'new-password';
+}) {
+  return (
+    <TextInput
+      placeholder={placeholder}
+      placeholderTextColor={C.muted}
+      value={value}
+      onChangeText={onChange}
+      secureTextEntry={secure}
+      keyboardType={keyboardType}
+      autoComplete={autoComplete}
+      autoCapitalize="none"
+      style={{
+        backgroundColor: '#151b24',
+        borderWidth: 1,
+        borderColor: C.line,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        color: C.fg,
+        fontSize: 15,
+      }}
+    />
   );
 }

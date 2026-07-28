@@ -1,15 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import type { Option } from '../game/filter-options';
+import { C, S } from './theme';
 
 /**
  * Filtres partagés par la réserve et la fabrication en boucle.
  *
- * Chaque filtre est un menu déroulant à cases : on en cochent autant qu'on veut,
- * et une liste vide ne filtre rien — un filtre qu'on n'a pas réglé ne doit
- * jamais rien cacher ni rien jeter.
+ * Chaque filtre est une liste de cases : on en coche autant qu'on veut, et une
+ * liste vide ne filtre rien — un filtre qu'on n'a pas réglé ne doit jamais rien
+ * cacher ni rien jeter.
+ *
+ * Il n'y a plus de menu flottant comme en web : sur un écran de téléphone, un
+ * panneau qui se déplie sous le bouton évite tout recouvrement, et se ferme d'un
+ * second appui.
  */
-
-import type { Option } from '../game/filter-options';
-
 export function Dropdown<T extends string>({
   label,
   options,
@@ -22,47 +26,48 @@ export function Dropdown<T extends string>({
   onChange: (next: T[]) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-
-  // Un clic ailleurs referme le menu : sans ça, deux menus restent ouverts en
-  // même temps et se recouvrent.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
 
   const toggle = (value: T) =>
     onChange(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]);
 
   return (
-    <div className="dropdown" ref={box}>
-      <button className={`chip ${selected.length ? 'on' : ''}`} onClick={() => setOpen(!open)}>
-        {label}
-        {selected.length > 0 && ` · ${selected.length}`}
-        <span className="caret">{open ? '▴' : '▾'}</span>
-      </button>
+    <View style={{ gap: 6 }}>
+      <Pressable
+        onPress={() => setOpen(!open)}
+        style={[
+          S.button,
+          { paddingVertical: 6, paddingHorizontal: 10 },
+          selected.length > 0 && { borderColor: C.essence },
+        ]}
+      >
+        <Text style={[S.buttonText, S.small, selected.length > 0 && { color: C.essence }]}>
+          {label}
+          {selected.length > 0 ? ` · ${selected.length}` : ''} {open ? '▴' : '▾'}
+        </Text>
+      </Pressable>
 
       {open && (
-        <div className="dropdown-panel">
-          <button className="ghost small" onClick={() => onChange([])}>
-            Tout décocher
-          </button>
+        <View style={{ gap: 4, paddingLeft: 4 }}>
+          <Pressable onPress={() => onChange([])}>
+            <Text style={[S.muted, S.small]}>Tout décocher</Text>
+          </Pressable>
           {options.map((o) => {
             const on = selected.includes(o.value);
             return (
-              <label key={o.value} className={`check ${on ? 'on' : ''}`}>
-                <input type="checkbox" checked={on} onChange={() => toggle(o.value)} />
-                <span style={o.color ? { color: o.color } : undefined}>{o.label}</span>
-              </label>
+              <Pressable
+                key={o.value}
+                onPress={() => toggle(o.value)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              >
+                <Text style={{ color: on ? C.essence : C.muted, fontSize: 13 }}>
+                  {on ? '☑' : '☐'}
+                </Text>
+                <Text style={{ color: o.color ?? C.fg, fontSize: 13 }}>{o.label}</Text>
+              </Pressable>
             );
           })}
-        </div>
+        </View>
       )}
-    </div>
+    </View>
   );
 }
-

@@ -1,52 +1,50 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  Image,
+  Pressable,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
 import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
+import { districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
 import {
-  districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
-import { STEP_TIME, WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
+  STEP_TIME,
+  WAVE_PAUSE,
+  closingTime,
+  engagedEnemies,
+  formatNum,
+  type FightScope,
+} from '../game/engine';
 import { BACKGROUND_LAYERS, spriteSize } from '../game/sprites';
-import {
-  CONTACT_GAP,
-  EDGE,
-  FOE_BOX,
-  HERO_BOX,
-  arenaLayout,
-  fileSpacing,
-} from './arena-geometry';
-import { toggleHitboxes, useHitboxes } from './debug';
+import { image } from '../game/images';
 import { store, useGame } from '../game/store';
 import type { Enemy, Hero } from '../game/types';
-import type { FightScope } from '../game/engine';
 import { Sprite } from './Sprite';
+import { C, S } from './theme';
+import { toggleHitboxes, useHitboxes } from './debug';
+import { CONTACT_GAP, EDGE, FOE_BOX, HERO_BOX, arenaLayout, fileSpacing } from './arena-geometry';
 
 /**
  * L'arène : une seule scène, où la distance se joue vraiment.
  *
  * Déroulé d'une vague :
- * 1. le héros **tient sa place** au milieu de la scène ; il ne recule jamais et
- *    n'est jamais replacé d'un coup ;
- * 2. l'ennemi sort de la brume à droite et **marche jusqu'à lui** — le héros fait
- *    quelques pas à sa rencontre s'il se bat au contact ;
- * 3. arrivés au contact ils y restent, et échangent les coups jusqu'à la mort ;
- * 4. vague nettoyée, le héros marche jusqu'au bout à droite, l'écran passe au
- *    noir, et la vague suivante se lève sur une scène remise à zéro — héros à
- *    gauche, ennemis à droite.
+ * 1. le héros tient sa marque, à gauche ; l'ennemi entre par la droite ;
+ * 2. ils marchent l'un vers l'autre à la même vitesse — qui couvre quelle part du
+ *    chemin dépend des armes (voir `heroShare`) ;
+ * 3. arrivés au contact, boîtes à quelques pixels l'une de l'autre, ils échangent
+ *    les coups jusqu'à la mort ;
+ * 4. un rang tombe : le héros franchit un pas jusqu'au suivant, et ne frappe pas
+ *    pendant ce pas ;
+ * 5. vague nettoyée — ou héros tombé — l'écran passe au noir, la scène se remet en
+ *    ordre, et la suivante entre par la droite.
  *
- * Sur une vague à plusieurs, seuls les `CONTACT_SLOTS` premiers tiennent au
- * contact et frappent ensemble ; les suivants attendent leur tour en retrait et
- * n'infligent aucun dégât tant qu'ils n'ont pas de place.
- *
- * L'approche est comptée par le **moteur** (`combat.closing`) : tant qu'elle
- * dure, aucun coup ne part, d'aucun des deux camps. L'affichage et la simulation
- * racontent donc la même chose, et on ne voit plus un coup porter depuis l'autre
- * bout de l'arène.
- *
- * Tout ceci est de la mise en scène : la simulation ne connaît que des cadences
- * de frappe, le déplacement les suit sans changer aucun résultat.
+ * Toute la géométrie est **calculée** (`arena-geometry.ts`), jamais mesurée : seule
+ * la largeur de la scène est lue. Les déplacements passent par `Animated`, qui
+ * remplace les transitions et `@keyframes` de la version web.
  */
-
-
-
-
 export function Arena({
   fight,
   scope = 'chapter',
@@ -67,7 +65,6 @@ export function Arena({
   district?: number;
 } = {}) {
   const state = useGame();
-  // Sans combat fourni, on affiche celui du chapitre : c'est le cas courant.
   const chapter = state.combat;
   const c = {
     hero: fight?.hero ?? chapter.hero,
@@ -76,74 +73,48 @@ export function Arena({
     reviving: fight?.reviving ?? chapter.reviving,
     district: district ?? chapter.district,
     wave: fight?.wave ?? chapter.wave,
-    // Nombre de vagues du front affiché : une mission a la longueur de son
-    // tirage du jour, un chapitre en a toujours dix.
     waves: fight?.waves ?? WAVES_PER_DISTRICT,
     interlude: fight ? (fight.interlude ?? 0) : (chapter.interlude ?? 0),
     // Une mission n'a pas de relève : une chute y met fin.
     interludeFrom: fight ? 'wave' : (chapter.interludeFrom ?? 'wave'),
   };
-  /** Entre deux vagues : le héros marche vers la sortie, personne ne se bat. */
   const between = c.interlude > 0;
-  /**
-   * Temps mort qui suit une chute : même écran noir, même entrée de l'ennemi par
-   * la droite, mais le héros ne sort pas — il se relève sur place.
-   */
+  /** Temps mort qui suit une chute : le héros ne sort pas, il se relève sur place. */
   const afterDeath = between && c.interludeFrom === 'death';
 
   const hero = state.character ?? DEFAULT_CHARACTER;
-  // Un mort quitte la scène : la cible affichée est le **premier ennemi encore
-  // vivant**, et lui seul porte la mise en scène complète (marche, contact).
-  // Ceux qui restent derrière avancent d'un rang à chaque mort.
   const frontIndex = Math.max(0, c.enemies.findIndex((e) => e.hp > 0));
   const front = c.enemies[frontIndex] ?? c.enemies[0];
   const sprite = front?.sprite ?? 'champignon';
   // « Écho de soi » du Puits Prismatique : l'ennemi est le sprite du joueur.
   const foe = sprite === 'self' ? hero : sprite;
-  // Qui est au contact et qui fait la queue : la même règle que le moteur, pour
-  // que ceux qu'on voit taper soient exactement ceux qui infligent des dégâts.
   const engaged = engagedEnemies(c.enemies);
   /** Rangs déjà tombés dans cette vague : autant de pas que le héros a franchis. */
   const fallen = c.enemies.filter((e) => e.hp <= 0).length;
 
   const guardian = c.wave === c.waves;
-  // C'est l'arme équipée qui décide : de mêlée, il faut traverser.
   const heroStyle = state.equipped.arme?.ranged ? 'ranged' : 'melee';
   const foeStyle = spriteStyle(foe);
   const dead = c.reviving > 0;
-
-  const arenaRef = useRef<HTMLDivElement>(null);
   const showHitboxes = useHitboxes();
-  // Seule chose lue à l'écran : la largeur de la scène. Tout le placement en
-  // découle par le calcul (voir arena-geometry.ts).
-  const arenaWidth = useArenaWidth(arenaRef);
 
-  // Même vitesse de déplacement pour tout le monde. Une arme de mêlée envoie le
-  // héros à sa marque, à mi-distance, et il y reste : les vagues suivantes
-  // viennent à lui. Une arme à distance le laisse en arrière, et c'est l'ennemi
-  // qui traverse toute l'arène.
-  // Qui couvre quelle distance, à vitesse égale :
-  //
-  // - les deux au contact : ils se rejoignent au milieu ;
-  // - héros au contact, ennemi à distance (une bestiole qui vole) : le héros fait
-  //   **tout** le chemin, il va la chercher sous le nez ;
-  // - héros à distance : il ne bouge pas, l'ennemi traverse.
+  // La largeur de la scène est la seule mesure : `onLayout` la donne, et tout le
+  // placement en découle par le calcul.
+  const [arenaWidth, setArenaWidth] = useState(0);
+  const onLayout = (e: LayoutChangeEvent) => setArenaWidth(e.nativeEvent.layout.width);
+
+  // Qui couvre quelle distance, à vitesse égale : les deux au contact se
+  // rejoignent au milieu ; face à une bestiole qui vole, le héros fait tout le
+  // chemin ; s'il frappe à distance, il ne bouge pas.
   const heroShare = heroStyle === 'melee' ? (foeStyle === 'melee' ? 0.5 : 1) : 0;
-  // Largeurs des sprites, calculées depuis le catalogue : c'est ce qui rend le
-  // placement exact sans rien mesurer.
   const heroWidth = spriteSize(hero).width;
   const foeWidth = spriteSize(foe, guardian && c.enemies.length === 1 ? 1.3 : 1).width;
   const layout = arenaLayout(arenaWidth, heroWidth, foeWidth, heroShare);
-  // Les rangs ne reculent pas : quand celui de devant tombe, le héros franchit un
-  // pas de plus, depuis là où il se trouve, pour retrouver le contact.
   const step = fileSpacing(foeWidth);
   const heroTravel = layout.heroTravel + fallen * step;
   const foeTravel = foeStyle === 'melee' ? layout.foeTravel : 0;
-  // Sortie de scène entre deux vagues : jusqu'au bord droit, derrière l'ennemi.
   const exitTravel = Math.max(0, arenaWidth - EDGE - heroWidth - layout.heroLeft);
-  // La marche dure exactement l'approche accordée par le moteur, et se joue
-  // pendant son décompte : à l'arrivée, les coups partent. Un pas vers le rang
-  // suivant est court (STEP_TIME), l'entrée en scène est longue.
+
   const walkMs = between
     ? WAVE_PAUSE * 1000
     : fallen > 0
@@ -151,170 +122,85 @@ export function Arena({
       : Math.max(120, closingTime(state) * 1000);
 
   const walking = (c.closing ?? 0) > 0 && !dead;
-
-
-  // Frappes : impulsion vers l'adversaire au moment du coup.
-  const heroStrike = usePulse(store.heroSwings[scope], 220) && !dead;
-  // Le héros encaisse : éclat blanc et léger recul. Les ennemis, eux, gèrent leur
-  // propre éclat dans `FoeUnit`, chacun sur les coups qui le visent.
-  const heroHit = usePulse(store.foeSwings[scope], 170) && !dead;
-
-  // Entre deux vagues, le héros continue jusqu'au bout de l'arène : c'est ce
-  // déplacement qui raconte qu'on avance, plutôt qu'un décor qui défile.
-  //
-  // Comme l'ennemi, il part **toujours de sa marque** et s'anime vers sa cible :
-  // une transition l'aurait fait reculer en glissant à la fin du temps mort, au
-  // lieu de réapparaître à gauche sur la nouvelle scène.
-  // Mort, il tombe **là où il se tenait** : rien ne le replace tant que l'écran
-  // n'est pas noir. Le retour à sa marque se fait ensuite, sous le noir.
-  const heroAt = afterDeath ? 0 : dead ? heroTravel : between ? exitTravel : heroTravel;
-  // Le rideau noir couvre toutes les coupures : il tombe pendant que le héros
-  // finit sa sortie, ou d'un coup quand il tombe, et se lève sur la scène remise
-  // en ordre. C'est lui qui autorise le repositionnement instantané des camps.
-  //
-  // Entre deux vagues il attend que la marche de sortie soit bien entamée ; à la
-  // mort il tombe tout de suite, pour qu'on ne voie pas l'ennemi rester planté là.
-  // Le hook est appelé sans condition : un `||` court-circuité l'aurait sauté
-  // certains rendus, ce que React interdit.
-  const waveCurtain = useDelayed(between && !afterDeath, 1100);
-  const curtain = dead || afterDeath || waveCurtain;
-  // Plus de détection de collision à l'écran : la marche s'achève **exactement**
-  // au contact, puisque sa distance est calculée pour cela. Le décompte du moteur
-  // (`closing`) et l'animation partagent la même durée, donc l'instant où les
-  // coups partent est aussi celui de l'arrivée.
   const heroWalking = (walking && heroTravel > 0) || (between && !afterDeath);
   const foeWalking = walking && foeTravel > 0;
 
-  // Les à-coups de combat vivent sur leur propre couche : ils ne touchent plus à
-  // la position de marche.
+  const heroStrike = usePulse(store.heroSwings[scope], 220) && !dead;
+  const heroHit = usePulse(store.foeSwings[scope], 170) && !dead;
+
+  // Position du héros. Mort, il reste là où il est tombé ; après une chute il
+  // revient à sa marque sous le noir ; entre deux vagues il sort par la droite.
+  const heroAt = afterDeath ? 0 : dead ? heroTravel : between ? exitTravel : heroTravel;
+  const heroFrom = between ? heroTravel : fallen > 0 ? heroTravel - step : 0;
+  const heroX = useWalk(heroAt, heroFrom, walkMs, `${between}-${c.district}-${c.wave}-${fallen}`);
+
+  // Le rideau noir couvre les coupures : d'un coup à la mort, avec un temps de
+  // retard entre deux vagues — celui de la sortie de scène.
+  const waveCurtain = useDelayed(between && !afterDeath, 1100);
+  const curtain = dead || afterDeath || waveCurtain;
+  const curtainOpacity = useFade(curtain ? 1 : 0, 450);
+  const hurtFlash = useFade(heroHit ? 0.16 : 0, 120);
+
   const heroJolt = (heroStrike ? 7 : 0) - (heroHit ? 5 : 0);
 
   return (
-    <div
-      className={`arena ${heroHit ? 'shaken' : ''} ${showHitboxes ? 'debug-hitbox' : ''}`}
-      ref={arenaRef}
-    >
+    <View style={styles.arena} onLayout={onLayout}>
       {/* Décor en cinq couches, de la plus lointaine à la plus proche. */}
-      {BACKGROUND_LAYERS.map((src, i) => (
-        <div
-          key={src}
-          className="bg-layer"
-          aria-hidden="true"
-          style={{
-            backgroundImage: `url(${src})`,
-            transform: `translateX(${(i - 2) * 4}px) scale(${1 + i * 0.02})`,
-          }}
-        />
-      ))}
+      {BACKGROUND_LAYERS.map((src, i) => {
+        const source = image(src);
+        return source ? (
+          <Image
+            key={src}
+            source={source}
+            style={[
+              styles.bgLayer,
+              { transform: [{ translateX: (i - 2) * 4 }, { scale: 1 + i * 0.02 }] },
+            ]}
+            resizeMode="cover"
+          />
+        ) : null;
+      })}
 
-      {/* Toujours monté : c'est son opacité qui monte et descend, donc le fondu se
-          joue dans les deux sens sans dépendre du montage. */}
-      <div className={`blackout ${curtain ? 'on' : ''}`} aria-hidden="true" />
-
-      {/* Chapitre et vague s'affichent sur la scène, pas dans une barre au-dessus :
-          c'est là que le joueur regarde. L'annonce se lit en grand pendant le
-          temps mort, et reste discrète pendant le combat. */}
-      <div className={`wave-banner ${between ? 'announce' : ''}`} aria-live="polite">
-        <b>{districtLabel(c.district)}</b>
-        <span>
+      {/* Chapitre et vague sur la scène : c'est là que le joueur regarde.
+          L'annonce se lit en grand pendant le temps mort. */}
+      <View style={[styles.banner, between && styles.bannerAnnounce]} pointerEvents="none">
+        <Text style={[styles.bannerTitle, between && { color: C.essence, fontSize: 17 }]}>
+          {districtLabel(c.district)}
+        </Text>
+        <Text style={[styles.bannerLine, between && { fontSize: 13, color: C.fg }]}>
           Vague {c.wave} / {c.waves}
-          {c.wave === c.waves && ' · gardien'}
-        </span>
-      </div>
+          {c.wave === c.waves ? ' · gardien' : ''}
+        </Text>
+      </View>
 
-      {/* Boîtes de collision à la demande : la géométrie étant calculée, pouvoir
-          la regarder vaut mieux que la déduire. Le réglage vit hors de la
-          sauvegarde (voir debug.ts). */}
-      <button
-        className="hitbox-toggle"
-        title={showHitboxes ? 'Masquer les boîtes de collision' : 'Afficher les boîtes de collision'}
-        onClick={toggleHitboxes}
+      {/* Le héros : la position vient du calcul, la marche d'`Animated`, et les
+          à-coups de frappe d'une couche à part — sinon un coup écraserait la
+          marche en cours, ce qui donnait un dash. */}
+      <Animated.View
+        style={[styles.slot, { left: layout.heroLeft, transform: [{ translateX: heroX }] }]}
       >
-        ▣
-      </button>
-
-      {showHitboxes && (
-        <div className="hitbox-guides" aria-hidden="true">
-          {/* Marques d'arrivée : les bords des **boîtes**, pas des cases. */}
-          <i
-            className="mark hero-stop"
-            style={{ left: layout.heroLeft + heroWidth - layout.heroInset + heroTravel }}
+        <Animated.View style={{ transform: [{ translateX: heroJolt }] }}>
+          {showHitboxes && <Box inset={layout.heroInset} color={C.essence} />}
+          <Sprite
+            character={hero}
+            anim={heroAnim(dead, c.reviving, heroWalking, heroStrike, heroHit)}
+            fallbackAnim={['idle']}
+            fade={heroHit}
           />
-          <i
-            className="mark foe-stop"
-            style={{ left: layout.foeLeft + layout.foeInset - foeTravel }}
-          />
-          <span className="hitbox-readout">
-            scène {Math.round(arenaWidth)} · boîtes {Math.round(heroWidth * HERO_BOX)} /{' '}
-            {Math.round(foeWidth * FOE_BOX)} · marche {Math.round(heroTravel)} /{' '}
-            {Math.round(foeTravel)} · écart {CONTACT_GAP} · pas {step}
-          </span>
-        </div>
-      )}
+        </Animated.View>
+        <TakenHits scope={scope} />
+      </Animated.View>
 
-      <div className="fighter-slot hero" style={{ left: layout.heroLeft }}>
-        {/*
-          Deux couches, comme pour l'ennemi : `mover` porte la marche — longue et
-          linéaire —, `lunge` porte les à-coups de frappe et de recul, courts et
-          secs. Les mettre sur le même élément faisait qu'un coup réinterprétait
-          la transition de marche en cours : le héros traversait alors l'arène en
-          110 ms, ce qui donnait un dash vers l'ennemi.
-        */}
-        <div
-          key={between ? 'exit' : `${c.district}-${c.wave}-${fallen}`}
-          className={`mover ${heroAt > 0 ? 'approaching' : ''}`}
-          style={{
-            // La marche part **d'où il se trouve** : de sa marque pour entrer en
-            // scène, de sa position actuelle pour un pas vers le rang suivant ou
-            // pour la sortie. Sinon on le voyait revenir en arrière d'un coup.
-            ['--from' as string]: `${
-              between ? heroTravel : fallen > 0 ? heroTravel - step : 0
-            }px`,
-            ['--to' as string]: `${heroAt}px`,
-            animationDuration: `${walkMs}ms`,
-            transform: heroAt > 0 ? undefined : 'translateX(0)',
-          }}
-        >
-          <div
-            className="lunge"
-            style={{ transform: `translateX(${heroJolt}px)` }}
-          >
-            {/* La boîte telle qu'elle compte vraiment : la case, resserrée. */}
-            {showHitboxes && (
-              <span
-                className="hitbox-box hero"
-                aria-hidden="true"
-                style={{ left: layout.heroInset, right: layout.heroInset }}
-              />
-            )}
-            <Sprite
-              character={hero}
-              anim={heroAnim(dead, c.reviving, heroWalking, heroStrike, heroHit)}
-              fallbackAnim={['idle']}
-              className={heroHit ? 'flash' : ''}
-            />
-          </div>
-          {heroHit && <span className="impact" aria-hidden="true" />}
-          {/* Ce que le héros encaisse, en chiffres, au moment où il l'encaisse. */}
-          <TakenHits scope={scope} />
-        </div>
-      </div>
-
-      {/*
-        La vague en file indienne. Chaque ennemi garde le rang de son index :
-        son écart de départ ne dépend pas de qui est encore en vie, donc quand
-        celui de devant tombe, les autres **ne bougent pas** — ils restent où ils
-        sont et frappent de là, dès que le moteur leur donne une place au contact.
-      */}
-      <div
-        className={`fighter-slot foe ${between || !front ? 'gone' : ''}`}
-        style={{ left: layout.foeLeft }}
+      {/* La vague en file indienne. Chaque ennemi garde le rang de son index :
+          quand celui de devant tombe, les autres ne bougent pas. */}
+      <View
+        style={[styles.slot, { left: layout.foeLeft, opacity: between || !front ? 0 : 1 }]}
+        pointerEvents="none"
       >
         {c.enemies.map((enemy, index) =>
           enemy.hp <= 0 ? null : (
             <FoeUnit
               key={index}
-              // La boîte est recréée à chaque vague : l'entrée en scène rejoue.
               wave={`${c.district}-${c.wave}`}
               scope={scope}
               enemy={enemy}
@@ -322,9 +208,6 @@ export function Arena({
               hero={hero}
               cycled={cycleOf(c.district) > 0}
               guardian={guardian && c.enemies.length === 1}
-              // Tout le monde couvre la même distance : la file garde sa
-              // formation, le premier rang arrive au contact et les autres
-              // restent derrière, à un rang d'écart.
               travel={
                 spriteStyle(enemy.sprite === 'self' ? hero : enemy.sprite) === 'melee'
                   ? foeTravel
@@ -332,24 +215,60 @@ export function Arena({
               }
               rank={index}
               spacing={step}
-              showBox={showHitboxes ? layout.foeInset : undefined}
               walkMs={walkMs}
               walking={foeWalking}
               engaged={engaged.has(index)}
+              showBox={showHitboxes ? layout.foeInset : undefined}
             />
           ),
         )}
-      </div>
+      </View>
 
       {/* Un ennemi à distance projette, puisqu'il ne s'approche jamais. */}
       {foeStyle === 'ranged' && (
         <Projectiles
           distance={layout.foeLeft - layout.heroLeft - heroWidth}
           swings={store.foeSwings[scope]}
-          color="#9ad6c0"
         />
       )}
-    </div>
+
+      {/* Repères de mise au point : marques d'arrivée et relevé des chiffres. */}
+      {showHitboxes && (
+        <View style={styles.guides} pointerEvents="none">
+          <View
+            style={[
+              styles.mark,
+              { left: layout.heroLeft + heroWidth - layout.heroInset + heroTravel },
+            ]}
+          />
+          <View
+            style={[
+              styles.mark,
+              { left: layout.foeLeft + layout.foeInset - foeTravel, backgroundColor: C.reagent },
+            ]}
+          />
+          <Text style={styles.readout}>
+            scène {Math.round(arenaWidth)} · boîtes {Math.round(heroWidth * HERO_BOX)} /{' '}
+            {Math.round(foeWidth * FOE_BOX)} · marche {Math.round(heroTravel)} /{' '}
+            {Math.round(foeTravel)} · écart {CONTACT_GAP} · pas {step}
+          </Text>
+        </View>
+      )}
+
+      {/* Le rideau, toujours monté : c'est son opacité qui monte et descend, donc
+          le fondu se joue dans les deux sens. */}
+      <Animated.View style={[styles.blackout, { opacity: curtainOpacity }]} pointerEvents="none" />
+
+      {/* Ce qu'on encaisse : un voile rouge très bref, à la place de la secousse. */}
+      <Animated.View style={[styles.hurtFlash, { opacity: hurtFlash }]} pointerEvents="none" />
+
+      <Pressable
+        onPress={toggleHitboxes}
+        style={[styles.toggle, showHitboxes && { borderColor: C.essence }]}
+      >
+        <Text style={{ color: showHitboxes ? C.essence : C.muted, fontSize: 11 }}>▣</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -377,8 +296,8 @@ function foeAnim(walking: boolean, striking: boolean, hit: boolean): string {
 
 /**
  * Un ennemi de la vague, à son rang. Tous entrent par la droite et couvrent la
- * même distance, donc la file arrive en formation ; l'écart vient du rang, pas
- * de l'ordre des vivants, si bien qu'une mort ne déplace personne.
+ * même distance, donc la file arrive en formation ; l'écart vient du rang, pas de
+ * l'ordre des vivants, si bien qu'une mort ne déplace personne.
  *
  * Il ne frappe que si le moteur lui accorde une place au contact
  * (`engagedEnemies`) : ceux qui font la queue attendent sans infliger de dégâts.
@@ -407,12 +326,12 @@ function FoeUnit({
   travel: number;
   walkMs: number;
   walking: boolean;
+  /** Change à chaque vague : relance l'animation d'entrée. */
   wave: string;
   engaged: boolean;
   hero: string;
   cycled: boolean;
   guardian: boolean;
-  /** Écart entre deux rangs de la file, en pixels. */
   spacing: number;
   /** Vide de chaque côté, quand on demande à voir les boîtes ; sinon `undefined`. */
   showBox?: number;
@@ -420,47 +339,60 @@ function FoeUnit({
   useGame();
   const sprite = enemy.sprite === 'self' ? hero : enemy.sprite;
   const ranged = spriteStyle(sprite) === 'ranged';
-  // Chaque ennemi ne flashe que sur les coups qui le visent.
+  // Chaque ennemi ne réagit qu'aux coups qui le visent.
   const lastHit = [...store.hits[scope]].reverse().find((h) => h.targetIndex === index);
   const hit = usePulse(lastHit?.id ?? 0, 150);
   // Ceux qui sont au contact frappent ensemble : même compteur de salves.
   const striking = usePulse(store.foeSwings[scope], 220) && engaged;
   const jolt = -((striking ? 7 : 0) - (hit ? 5 : 0));
+  const x = useWalk(rank * spacing, rank * spacing + travel, walkMs, wave);
+  const hover = useHover(ranged);
 
   return (
-    <div className="foe-unit" style={{ transform: `translateX(${rank * spacing}px)` }}>
-      <div
-        key={wave}
-        className={`mover ${travel > 0 ? 'approaching' : ''}`}
-        style={{
-          ['--to' as string]: `${-travel}px`,
-          animationDuration: `${walkMs}ms`,
-          transform: travel > 0 ? undefined : 'translateX(0)',
-        }}
-      >
-        <div className="lunge" style={{ transform: `translateX(${jolt}px)` }}>
-          {showBox !== undefined && (
-            <span
-              className="hitbox-box foe"
-              aria-hidden="true"
-              style={{ left: showBox, right: showBox }}
-            />
-          )}
-          <Sprite
-            character={sprite}
-            anim={foeAnim(walking && travel > 0, striking, hit)}
-            fallbackAnim={['idle']}
-            scale={guardian ? 1.3 : 1}
-            flip
-            className={`foe enter ${cycled ? 'cycled' : ''} ${ranged ? 'flyer' : ''} ${
-              hit ? 'flash' : ''
-            } ${engaged ? '' : 'waiting'}`}
-          />
-        </div>
-        {hit && <span className="impact" aria-hidden="true" />}
-        <FloatingHits scope={scope} target={index} />
-      </div>
-    </div>
+    <Animated.View
+      style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        transform: [{ translateX: x }, { translateY: hover }],
+        // Celui qui attend sa place au contact : présent, mais en retrait.
+        opacity: engaged ? 1 : 0.72,
+      }}
+    >
+      <Animated.View style={{ transform: [{ translateX: jolt }] }}>
+        {showBox !== undefined && <Box inset={showBox} color={C.reagent} />}
+        <Sprite
+          character={sprite}
+          anim={foeAnim(walking && travel > 0, striking, hit)}
+          fallbackAnim={['idle']}
+          scale={guardian ? 1.3 : 1}
+          flip
+          fade={hit}
+          style={cycled ? { opacity: 0.92 } : undefined}
+        />
+      </Animated.View>
+      <FloatingHits scope={scope} target={index} />
+    </Animated.View>
+  );
+}
+
+/** Tracé d'une boîte de collision, quand on demande à les voir. */
+function Box({ inset, color }: { inset: number; color: string }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        left: inset,
+        right: inset,
+        zIndex: 3,
+        borderWidth: 1,
+        borderColor: color,
+        backgroundColor: `${color}22`,
+      }}
+    />
   );
 }
 
@@ -473,17 +405,17 @@ function usePulse(counter: number, ms: number): boolean {
     if (counter === seen.current) return;
     seen.current = counter;
     setOn(true);
-    const t = window.setTimeout(() => setOn(false), ms);
-    return () => window.clearTimeout(t);
+    const t = setTimeout(() => setOn(false), ms);
+    return () => clearTimeout(t);
   }, [counter, ms]);
 
   return on;
 }
 
 /**
- * Vrai `ms` après que `flag` soit passé à vrai, et faux dès qu'il retombe. Sert
- * au rideau noir : il ne doit descendre qu'une fois la sortie de scène entamée,
- * mais se lever sans délai.
+ * Vrai `ms` après que `flag` soit passé à vrai, et faux dès qu'il retombe. Sert au
+ * rideau noir : il ne doit descendre qu'une fois la sortie de scène entamée, mais
+ * se lever sans délai.
  */
 function useDelayed(flag: boolean, ms: number): boolean {
   const [on, setOn] = useState(false);
@@ -493,45 +425,95 @@ function useDelayed(flag: boolean, ms: number): boolean {
       setOn(false);
       return;
     }
-    const t = window.setTimeout(() => setOn(true), ms);
-    return () => window.clearTimeout(t);
+    const t = setTimeout(() => setOn(true), ms);
+    return () => clearTimeout(t);
   }, [flag, ms]);
 
   return on;
 }
 
 /**
- * Largeur de la scène. C'est la **seule** chose lue dans le DOM : tout le reste du
- * placement en découle par le calcul, ce qui évite de dépendre de quel élément
- * porte quelle boîte — l'erreur qui a fait échouer trois corrections de suite.
+ * Marche animée : part de `from`, rejoint `to` en `ms`, et **rejoue depuis le
+ * départ** à chaque changement de `key` — une nouvelle vague, ou un pas vers le
+ * rang suivant. C'est l'équivalent des `@keyframes` de la version web, dont la
+ * relance dépendait d'un remontage de l'élément.
  */
-function useArenaWidth(arena: React.RefObject<HTMLDivElement | null>): number {
-  const [width, setWidth] = useState(0);
+function useWalk(from: number, to: number, ms: number, key: string): Animated.Value {
+  const value = useRef(new Animated.Value(from)).current;
+  const seen = useRef<string | null>(null);
 
-  useLayoutEffect(() => {
-    const el = arena.current;
-    if (!el) return;
-    const measure = () => setWidth(el.clientWidth);
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [arena]);
+  useEffect(() => {
+    if (seen.current !== key) {
+      seen.current = key;
+      value.setValue(from);
+    }
+    const animation = Animated.timing(value, {
+      toValue: to,
+      duration: Math.max(1, ms),
+      easing: Easing.linear,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+    // `from` seul ne relance rien : c'est la clé qui décide d'un nouveau départ.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [to, ms, key, value]);
 
-  return width;
+  return value;
+}
+
+/** Fondu générique, pour tout ce qui apparaît et disparaît. */
+function useFade(to: number, ms: number): Animated.Value {
+  const value = useRef(new Animated.Value(to)).current;
+
+  useEffect(() => {
+    const animation = Animated.timing(value, {
+      toValue: to,
+      duration: ms,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [to, ms, value]);
+
+  return value;
+}
+
+/** Flottement continu des créatures volantes : elles ne posent pas les pieds. */
+function useHover(active: boolean): Animated.Value {
+  const value = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!active) {
+      value.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(value, {
+          toValue: -16,
+          duration: 1300,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(value, {
+          toValue: -8,
+          duration: 1300,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [active, value]);
+
+  return value;
 }
 
 /** Projectiles d'un ennemi à distance, vers le héros. */
-function Projectiles({
-  distance,
-  swings,
-  color,
-}: {
-  distance: number;
-  swings: number;
-  color: string;
-}) {
+function Projectiles({ distance, swings }: { distance: number; swings: number }) {
   const [shots, setShots] = useState<number[]>([]);
   const seen = useRef(swings);
 
@@ -539,61 +521,80 @@ function Projectiles({
     if (swings === seen.current) return;
     seen.current = swings;
     setShots((p) => [...p, swings].slice(-4));
-    const t = window.setTimeout(() => setShots((p) => p.slice(1)), 420);
-    return () => window.clearTimeout(t);
+    const t = setTimeout(() => setShots((p) => p.slice(1)), 420);
+    return () => clearTimeout(t);
   }, [swings]);
 
   return (
-    <div className="shots foe" aria-hidden="true">
+    <View style={styles.shots} pointerEvents="none">
       {shots.map((id) => (
-        <i
-          key={id}
-          style={{
-            background: color,
-            boxShadow: `0 0 8px ${color}`,
-            ['--travel' as string]: `${-distance}px`,
-          }}
-        />
+        <Shot key={id} distance={distance} />
       ))}
-    </div>
+    </View>
   );
 }
 
-/** Dégâts reçus par le héros : mêmes chiffres flottants, mais en rouge. */
-function TakenHits({ scope }: { scope: FightScope }) {
-  useGame();
-  return (
-    <div className="hits" aria-hidden="true">
-      {store.taken[scope].map((h) => (
-        <span
-          key={h.id}
-          className="hit taken"
-          style={{ left: `calc(50% + ${h.dx}px)`, top: `${h.dy}px` }}
-        >
-          −{formatNum(h.damage)}
-        </span>
-      ))}
-    </div>
-  );
+function Shot({ distance }: { distance: number }) {
+  const x = useWalk(0, -distance, 420, `${distance}`);
+  return <Animated.View style={[styles.shot, { transform: [{ translateX: x }] }]} />;
 }
 
-/** Chiffres de dégâts : montée + fondu, critiques 1,4× et en jaune (§3). */
+/** Durée de vie d'un chiffre de dégâts ; la même que dans le magasin. */
+const HIT_LIFE = 1400;
+
+/**
+ * Chiffres de dégâts : montée et fondu. Ils sont calculés depuis l'âge du coup à
+ * chaque rendu — le magasin notifie à chaque image, donc c'est assez fluide, et ça
+ * évite une animation par chiffre.
+ */
 function FloatingHits({ scope, target }: { scope: FightScope; target?: number }) {
   useGame();
+  const now = performance.now();
   return (
-    <div className="hits" aria-hidden="true">
+    <View style={styles.hits} pointerEvents="none">
       {store.hits[scope]
         .filter((h) => target === undefined || h.targetIndex === target)
-        .map((h) => (
-        <span
-          key={h.id}
-          className={`hit ${h.crit ? 'crit' : ''}`}
-          style={{ left: `calc(50% + ${h.dx}px)`, top: `${h.dy}px` }}
-        >
-          {formatNum(h.damage)}
-        </span>
-      ))}
-    </div>
+        .map((h) => {
+          const age = Math.min(1, (now - h.born) / HIT_LIFE);
+          return (
+            <Text
+              key={h.id}
+              style={[
+                styles.hit,
+                h.crit && styles.hitCrit,
+                { left: 20 + h.dx, top: h.dy - age * 26, opacity: 1 - age },
+              ]}
+            >
+              {formatNum(h.damage)}
+            </Text>
+          );
+        })}
+    </View>
+  );
+}
+
+/** Ce que le héros encaisse, en rouge, au moment où il l'encaisse. */
+function TakenHits({ scope }: { scope: FightScope }) {
+  useGame();
+  const now = performance.now();
+  return (
+    <View style={styles.hits} pointerEvents="none">
+      {store.taken[scope].map((h) => {
+        const age = Math.min(1, (now - h.born) / HIT_LIFE);
+        return (
+          <Text
+            key={h.id}
+            style={[
+              styles.hit,
+              styles.hitTaken,
+              { left: 20 + h.dx, top: h.dy - age * 26, opacity: 1 - age },
+            ]}
+          >
+            −{formatNum(h.damage)}
+          </Text>
+        );
+      })}
+    </View>
   );
 }
 
@@ -612,17 +613,158 @@ export function FighterBar({
   /** Ligne facultative sous la barre ; omise, rien n'est réservé à l'écran. */
   note?: string;
 }) {
-  const pct = Math.max(0, Math.min(100, (hp / max) * 100));
+  const ratio = max > 0 ? hp / max : 0;
   return (
-    <div className={`fighter-bar ${side}`}>
-      <div className="bar">
-        <div className={`fill ${side}`} style={{ width: `${pct}%` }} />
-      </div>
-      <div className="fighter-name">{name}</div>
-      <div className="muted small">
+    <View style={{ flex: 1, gap: 3 }}>
+      <View style={S.bar}>
+        <View
+          style={[
+            S.barFill,
+            {
+              width: `${Math.max(0, Math.min(1, ratio)) * 100}%`,
+              backgroundColor: side === 'hero' ? C.essence : C.reagent,
+            },
+          ]}
+        />
+      </View>
+      <Text style={[S.text, S.small, { fontWeight: '600' }]} numberOfLines={1}>
+        {name}
+      </Text>
+      <Text style={[S.muted, S.small]}>
         {formatNum(Math.max(0, hp))} / {formatNum(max)}
-      </div>
-      {note ? <div className="muted small">{note}</div> : null}
-    </div>
+      </Text>
+      {note ? <Text style={[S.muted, S.small]}>{note}</Text> : null}
+    </View>
   );
 }
+
+const styles = {
+  arena: {
+    height: 168,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: C.ink,
+    position: 'relative',
+  },
+  bgLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: undefined,
+    height: undefined,
+  },
+  slot: {
+    position: 'absolute',
+    bottom: 12,
+  },
+  banner: {
+    position: 'absolute',
+    top: 6,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  bannerAnnounce: {
+    top: '40%',
+    zIndex: 6,
+  },
+  bannerTitle: {
+    color: '#cfd9e4',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  bannerLine: {
+    color: C.muted,
+    fontSize: 11,
+  },
+  blackout: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#05070a',
+    zIndex: 4,
+  },
+  hurtFlash: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#ff6b6b',
+    zIndex: 3,
+  },
+  hits: {
+    position: 'absolute',
+    left: -20,
+    right: -20,
+    top: -10,
+    bottom: 0,
+  },
+  hit: {
+    position: 'absolute',
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.fg,
+  },
+  hitCrit: {
+    color: C.lantern,
+    fontSize: 15,
+  },
+  hitTaken: {
+    color: '#ff8f8f',
+  },
+  shots: {
+    position: 'absolute',
+    right: '20%',
+    bottom: 74,
+  },
+  shot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#9ad6c0',
+  },
+  guides: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 5,
+  },
+  mark: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: C.essence,
+    opacity: 0.55,
+  },
+  readout: {
+    position: 'absolute',
+    left: 4,
+    bottom: 2,
+    fontSize: 9.5,
+    color: '#cfd9e4',
+    backgroundColor: 'rgba(10, 13, 20, 0.6)',
+    paddingHorizontal: 4,
+    borderRadius: 4,
+  },
+  toggle: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    zIndex: 7,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: C.line,
+    backgroundColor: 'rgba(10, 13, 20, 0.55)',
+  },
+} as const;

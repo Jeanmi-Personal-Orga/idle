@@ -1,4 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
+import { AppState } from 'react-native';
 import {
   SAVE_VERSION,
   applyOffline,
@@ -21,6 +22,7 @@ import { CHARACTERS, DEFAULT_CHARACTER } from './characters';
 import type { Enemy, GameState } from './types';
 import { pushSave } from './api';
 import { authStore } from './auth';
+import { getItem, removeItem, setItem } from './storage';
 
 const KEY = 'brume.save.v1';
 /** Pas de simulation fixe : rend le combat déterministe quel que soit le framerate. */
@@ -102,7 +104,9 @@ class GameStore {
       let steps = 0;
       // Les chiffres de dégâts ne servent à rien quand l'onglet est masqué :
       // on ne les collecte que si quelqu'un peut les voir.
-      const sink = document.hidden ? undefined : (e: CombatEvent) => this.onCombatEvent(e);
+      // En natif il n'y a pas d'onglet masqué : l'application est en avant-plan ou
+      // suspendue par le système, et dans ce cas la boucle ne tourne plus du tout.
+      const sink = (e: CombatEvent) => this.onCombatEvent(e);
       while (this.accumulator >= TICK && steps++ < 60) {
         this.accumulator -= TICK;
         step(this.state, TICK, Math.random, sink);
@@ -137,12 +141,16 @@ class GameStore {
     this.raf = requestAnimationFrame(frame);
 
     setInterval(() => this.save(), 5000);
-    window.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.save();
-      else {
+    // Mise en veille et retour d'arrière-plan : on sauvegarde en partant, et au
+    // retour on crédite le temps écoulé — c'est l'équivalent natif de
+    // `visibilitychange`.
+    AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
         applyOffline(this.state);
         this.lastFrame = performance.now();
         this.notify();
+      } else {
+        this.save();
       }
     });
   }
@@ -183,7 +191,7 @@ class GameStore {
   save() {
     this.state.lastSeen = Date.now();
     try {
-      localStorage.setItem(KEY, JSON.stringify(this.state));
+      setItem(KEY, JSON.stringify(this.state));
     } catch {
       /* quota plein ou stockage refusé : la partie continue en mémoire */
     }
@@ -209,7 +217,7 @@ class GameStore {
   }
 
   reset() {
-    localStorage.removeItem(KEY);
+    removeItem(KEY);
     this.state = newGame();
     this.notify();
   }
@@ -217,7 +225,7 @@ class GameStore {
 
 function load(): GameState | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = getItem(KEY);
     if (!raw) return null;
     return migrate(JSON.parse(raw) as GameState);
   } catch {
@@ -338,10 +346,10 @@ export function migrate(save: GameState): GameState | null {
 
 export const store = new GameStore();
 
-// En développement seulement : permet d'observer l'état depuis la console ou un
-// harnais de test, sans instrumenter le jeu lui-même.
-if (import.meta.env.DEV) {
-  (window as unknown as { store: GameStore }).store = store;
+// En développement seulement : permet d'observer l'état depuis un harnais de test
+// sans instrumenter le jeu lui-même.
+if (__DEV__) {
+  (globalThis as unknown as { store: GameStore }).store = store;
 }
 
 /** Abonne le composant à chaque tick du moteur. */

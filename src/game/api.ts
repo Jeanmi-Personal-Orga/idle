@@ -1,10 +1,19 @@
 /** Client HTTP pour le service de comptes/sauvegarde (server/). */
 
+import Constants from 'expo-constants';
 import type { GameState } from './types';
 
-// En dev sans Docker, l'API tourne sur localhost:3001 (voir server/README.md).
-// VITE_API_URL permet de pointer vers une autre instance (conteneur, prod...).
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+/**
+ * Adresse du serveur de comptes. Elle vient de la configuration Expo
+ * (`extra.apiUrl` dans app.json, surchargeable par variable d'environnement au
+ * build), et non plus d'`import.meta.env`, qui n'existe pas sous Metro.
+ *
+ * Attention en développement sur appareil : `localhost` désigne le téléphone, pas
+ * la machine de développement — il faut y mettre l'IP de la machine.
+ */
+const API_URL =
+  (Constants.expoConfig?.extra as { apiUrl?: string } | undefined)?.apiUrl ??
+  'http://localhost:3001';
 
 export interface AuthUser {
   id: number;

@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import * as api from './api';
 import type { AuthUser } from './api';
 import { store } from './store';
+import { getItem, removeItem, setItem } from './storage';
 
 const TOKEN_KEY = 'brume.auth.token';
 const SKIPPED_KEY = 'brume.auth.skipped';
@@ -18,7 +19,7 @@ class AuthStore {
   private listeners = new Set<() => void>();
 
   constructor() {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getItem(TOKEN_KEY);
     if (token) {
       // Le profil se rafraîchit en tâche de fond ; en attendant, un jeton
       // sans profil encore résolu vaut mieux qu'un aller-retour bloquant.
@@ -42,8 +43,8 @@ class AuthStore {
 
   private setSession(session: AuthSession) {
     this.session = session;
-    localStorage.setItem(TOKEN_KEY, session.token);
-    localStorage.removeItem(SKIPPED_KEY);
+    setItem(TOKEN_KEY, session.token);
+    removeItem(SKIPPED_KEY);
     this.notify();
   }
 
@@ -74,7 +75,7 @@ class AuthStore {
   }
 
   clear() {
-    localStorage.removeItem(TOKEN_KEY);
+    removeItem(TOKEN_KEY);
     this.session = null;
     this.notify();
   }
@@ -91,11 +92,11 @@ class AuthStore {
 export const authStore = new AuthStore();
 
 export function hasSkippedAuth(): boolean {
-  return localStorage.getItem(SKIPPED_KEY) === '1';
+  return getItem(SKIPPED_KEY) === '1';
 }
 
 export function skipAuth(): void {
-  localStorage.setItem(SKIPPED_KEY, '1');
+  setItem(SKIPPED_KEY, '1');
 }
 
 /** Abonne le composant à l'état d'authentification courant. */

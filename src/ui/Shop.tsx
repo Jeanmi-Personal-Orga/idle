@@ -1,7 +1,10 @@
+import { ScrollView, Text, View } from 'react-native';
 import { formatNum, grantKeys, keysLeft, pushLog } from '../game/engine';
 import { GOLD_PACKS, KEY_PACKS } from '../game/shop';
 import { store, useGame } from '../game/store';
 import { ResIcon } from './ResIcon';
+import { Button, Card, Label, Muted, Row } from './kit';
+import { S } from './theme';
 
 /**
  * Le comptoir, à deux étages :
@@ -13,36 +16,30 @@ import { ResIcon } from './ResIcon';
  * Les deux s'achètent en argent réel. Ni l'un ni l'autre ne vend de ressource :
  * une clé n'est qu'un droit d'entrée, il faut encore remporter la mission.
  *
- * ⚠ **Mode test** : cliquer sur un prix crédite l'or immédiatement, sans
- * paiement. C'est là uniquement pour équilibrer et essayer le jeu. Avant toute
- * mise en ligne, ces boutons doivent passer par un prestataire (Stripe côté web,
- * facturation App Store et Google Play côté mobile) **avec vérification du reçu
- * côté serveur** — sinon n'importe qui se crédite ce qu'il veut.
+ * ⚠ **Mode test** : toucher un prix crédite immédiatement, sans paiement. C'est là
+ * uniquement pour équilibrer et essayer le jeu. Avant toute mise en ligne, ces
+ * boutons doivent passer par la facturation App Store et Google Play **avec
+ * vérification du reçu côté serveur** — sinon n'importe qui se crédite ce qu'il
+ * veut.
  */
 export function ShopView() {
   const state = useGame();
 
   return (
-    <div className="view">
-      <div className="card">
-        <div className="label">Sacs d'or</div>
-        <div className="muted small">
-          Le seul achat en argent réel du jeu. Tout le reste se gagne en jouant.
-        </div>
+    <ScrollView contentContainerStyle={S.view}>
+      <Card>
+        <Label>Sacs d'or</Label>
+        <Muted>Le seul achat en argent réel du jeu. Tout le reste se gagne en jouant.</Muted>
         {GOLD_PACKS.map((pack) => (
-          <div className="row between" key={pack.id}>
-            <div>
-              <b>
-                <ResIcon id="goldCoin" size={14} /> {formatNum(pack.gold)}
-              </b>
-              {pack.bonus > 0 && (
-                <span className="muted small"> dont {formatNum(pack.bonus)} offerts</span>
-              )}
-            </div>
-            <button
-              className="ascend"
-              title="Mode test : crédite l'or sans paiement"
-              onClick={() =>
+          <Row between key={pack.id}>
+            <Row>
+              <ResIcon id="goldCoin" size={14} />
+              <Text style={S.bold}>{formatNum(pack.gold)}</Text>
+              {pack.bonus > 0 && <Muted>dont {formatNum(pack.bonus)} offerts</Muted>}
+            </Row>
+            <Button
+              tone="primary"
+              onPress={() =>
                 store.act((st) => {
                   st.resources.goldCoin += pack.gold;
                   pushLog(st, `Comptoir (test) : +${formatNum(pack.gold)} sacs d'or.`);
@@ -50,47 +47,41 @@ export function ShopView() {
               }
             >
               {pack.price}
-            </button>
-          </div>
+            </Button>
+          </Row>
         ))}
-        <div className="muted small">
+        <Muted>
           Mode test : les prix créditent l'or sans passer par un paiement. Avant la mise
-          en ligne, il faudra un prestataire et une vérification des reçus côté serveur.
-        </div>
-      </div>
+          en ligne, il faudra la facturation des magasins et une vérification des reçus
+          côté serveur.
+        </Muted>
+      </Card>
 
-      <div className="card">
-        <div className="row between">
-          <div className="label">Clés de mission</div>
-          <div className="muted small">
-            🔑 {keysLeft(state)} en poche
-          </div>
-        </div>
-        <div className="muted small">
+      <Card>
+        <Row between>
+          <Label>Clés de mission</Label>
+          <Muted>🔑 {keysLeft(state)} en poche</Muted>
+        </Row>
+        <Muted>
           Une clé ouvre une tentative de mission — et une mission déjà remportée se
-          rejoue pour sa récompense. On n'achète pas les ressources : on achète le
-          droit d'aller les chercher. Les clés achetées ne se périment pas : la
-          remise à zéro de minuit ne touche que les trois clés du jour.
-        </div>
+          rejoue pour sa récompense. On n'achète pas les ressources : on achète le droit
+          d'aller les chercher. Les clés achetées ne se périment pas : la remise à zéro
+          de minuit ne touche que les trois clés du jour.
+        </Muted>
         {KEY_PACKS.map((pack) => (
-          <div className="row between" key={pack.id}>
-            <div>
-              <b>🔑 {pack.keys}</b>
-              {pack.keys > 1 && <span className="muted small"> lot</span>}
-            </div>
-            <button
-              className="ascend"
-              title="Mode test : crédite les clés sans paiement"
-              onClick={() => store.act((st) => grantKeys(st, pack.keys))}
-            >
+          <Row between key={pack.id}>
+            <Row>
+              <Text style={S.bold}>🔑 {pack.keys}</Text>
+              {pack.keys > 1 && <Muted>lot</Muted>}
+            </Row>
+            <Button tone="primary" onPress={() => store.act((st) => grantKeys(st, pack.keys))}>
               {pack.price}
-            </button>
-          </div>
+            </Button>
+          </Row>
         ))}
-        <div className="muted small">
-          Mode test également : les clés sont créditées sans paiement.
-        </div>
-      </div>
-    </div>
+        <Muted>Mode test également : les clés sont créditées sans paiement.</Muted>
+      </Card>
+      <View style={{ height: 8 }} />
+    </ScrollView>
   );
 }

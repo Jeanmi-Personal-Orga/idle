@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { formatDuration, formatNum } from '../game/engine';
 import { skipCost } from '../game/formulas';
 import { resourceDef } from '../game/resources';
@@ -18,11 +19,14 @@ import {
   type BranchId,
   type TechNode,
 } from '../game/tech';
+import { Bar, Button, Card, Label, Muted, Row } from './kit';
+import { C, S } from './theme';
 
+/** L'arbre de recherche : trois branches, une par façon de progresser. */
 export function TechView() {
   const state = useGame();
   const [branch, setBranch] = useState<BranchId>('puissance');
-  const def = BRANCHES.find((b) => b.id === branch)!;
+  const def = BRANCHES.find((b) => b.id === branch) ?? BRANCHES[0];
   const affordable = NODES.filter(
     (n) =>
       isUnlocked(state, n) &&
@@ -31,48 +35,56 @@ export function TechView() {
   ).length;
 
   return (
-    <div className="view">
-      <div className="card tech-paper">
-        <div className="row between">
-          <div>
-            <div className="label">Recherche</div>
-            <div className="muted small">
-              <span className="res-insight">
-                <ResIcon id="insight" size={13} /> {formatNum(state.resources.insight)}
-              </span>{' '}
-              {resourceDef('insight').name.toLowerCase()} ·{' '}
-              {affordable > 0 ? `${affordable} nœud(s) à portée` : 'rien à portée'}
-            </div>
-          </div>
-        </div>
-        <div className="branch-tabs">
+    <ScrollView contentContainerStyle={S.view}>
+      <Card>
+        <Label>Recherche</Label>
+        <Row>
+          <ResIcon id="insight" size={13} />
+          <Text style={[S.text, S.small, { color: C.insight }]}>
+            {formatNum(state.resources.insight)}
+          </Text>
+          <Muted>
+            {resourceDef('insight').name.toLowerCase()} ·{' '}
+            {affordable > 0 ? `${affordable} nœud(s) à portée` : 'rien à portée'}
+          </Muted>
+        </Row>
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
           {BRANCHES.map((b) => (
-            <button
+            <Pressable
               key={b.id}
-              className={b.id === branch ? 'active' : ''}
-              style={b.id === branch ? { color: b.color, borderColor: b.color + '66' } : undefined}
-              onClick={() => setBranch(b.id)}
+              onPress={() => setBranch(b.id)}
+              style={[
+                S.button,
+                { flex: 1, flexDirection: 'column', gap: 2 },
+                b.id === branch ? { borderColor: b.color } : S.buttonGhost,
+              ]}
             >
-              <b>{b.name}</b>
-              <span className="muted small">{totalInvested(state, b.id)} niv.</span>
-            </button>
+              <Text
+                style={[S.buttonText, S.small, b.id === branch && { color: b.color }]}
+                numberOfLines={1}
+              >
+                {b.name}
+              </Text>
+              <Text style={[S.muted, { fontSize: 11 }]}>{totalInvested(state, b.id)} niv.</Text>
+            </Pressable>
           ))}
-        </div>
-        <div className="muted small">{def.blurb}</div>
+        </View>
+
+        <Muted>{def.blurb}</Muted>
         {state.researching && (
-          <div className="muted small">
+          <Muted>
             ⧗ Recherche en cours : {nodeDef(state.researching.id).name} ·{' '}
             {formatDuration(state.researching.remaining)} restant
-          </div>
+          </Muted>
         )}
-      </div>
+      </Card>
 
-      <div className="stack">
-        {nodesOf(branch).map((node) => (
-          <NodeCard key={node.id} node={node} color={def.color} />
-        ))}
-      </div>
-    </div>
+      {nodesOf(branch).map((node) => (
+        <NodeCard key={node.id} node={node} color={def.color} />
+      ))}
+      <View style={{ height: 8 }} />
+    </ScrollView>
   );
 }
 
@@ -89,91 +101,70 @@ function NodeCard({ node, color }: { node: TechNode; color: string }) {
   if (!unlocked) {
     const req = node.requires!;
     return (
-      <div className="card empty">
-        <div>
-          <b>{node.name}</b>
-          <div className="muted small">
-            Requiert {nodeDef(req.node).name} niv. {req.level}
-          </div>
-        </div>
-        <span className="muted">🔒</span>
-      </div>
+      <Card style={{ opacity: 0.6 }}>
+        <Row between>
+          <View>
+            <Text style={S.bold}>{node.name}</Text>
+            <Muted>
+              Requiert {nodeDef(req.node).name} niv. {req.level}
+            </Muted>
+          </View>
+          <Text style={S.muted}>🔒</Text>
+        </Row>
+      </Card>
     );
   }
 
   return (
-    <div
-      className={`card node tech-paper ${level > 0 ? 'owned' : ''} ${node.requires ? 'linked' : ''}`}
-      style={maxed ? { borderColor: color + '88' } : undefined}
-    >
-      <div className="row between">
-        <div>
-          <b style={maxed ? { color } : undefined}>{node.name}</b>
-          <div className="muted small">
-            {level > 0 ? node.effect(level) : 'aucun niveau'}
-          </div>
-        </div>
-        <div className="right">
-          <div className="label" style={{ color: maxed ? color : undefined }}>
-            {level} / {node.max}
-          </div>
-        </div>
-      </div>
+    <Card style={maxed ? { borderColor: color } : undefined}>
+      <Row between>
+        <View style={{ flex: 1 }}>
+          <Text style={[S.bold, maxed && { color }]}>{node.name}</Text>
+          <Muted>{level > 0 ? node.effect(level) : 'aucun niveau'}</Muted>
+        </View>
+        <Text style={[S.label, maxed && { color }]}>
+          {level} / {node.max}
+        </Text>
+      </Row>
 
-      <div className="bar">
-        <div
-          className="fill"
-          style={{ width: `${(level / node.max) * 100}%`, background: color }}
-        />
-      </div>
+      <Bar ratio={level / node.max} color={color} />
 
       {!maxed && (
         <>
-          <div className="muted small">Prochain : {node.effect(level + 1)}</div>
-          {active ? (
+          <Muted>Prochain : {node.effect(level + 1)}</Muted>
+          {active && state.researching ? (
             <>
               {/* La recherche en cours se voit, et s'achète : le bouton est
                   toujours là, avec son prix en sacs d'or au prorata du temps. */}
-              <div className="bar">
-                <div
-                  className="fill"
-                  style={{
-                    width: `${
-                      (1 - state.researching!.remaining / state.researching!.total) * 100
-                    }%`,
-                    background: color,
-                  }}
-                />
-              </div>
-              <div className="row between">
-                <div className="muted small">
-                  {formatDuration(state.researching!.remaining)} restant
-                </div>
-                <button
-                  disabled={state.resources.goldCoin < skipCost(state.researching!.remaining)}
-                  onClick={() => store.act((s) => researchWithGold(s, node.id))}
+              <Bar
+                ratio={1 - state.researching.remaining / state.researching.total}
+                color={color}
+              />
+              <Row between>
+                <Muted>{formatDuration(state.researching.remaining)} restant</Muted>
+                <Button
+                  disabled={state.resources.goldCoin < skipCost(state.researching.remaining)}
+                  onPress={() => store.act((s) => researchWithGold(s, node.id))}
                 >
-                  Finir maintenant
-                  <span className="muted small">
-                    {formatNum(skipCost(state.researching!.remaining))}{' '}
-                    <ResIcon id="goldCoin" size={13} />
-                  </span>
-                </button>
-              </div>
+                  <Text style={S.buttonText}>Finir maintenant</Text>
+                  <Text style={[S.muted, S.small]}>
+                    {formatNum(skipCost(state.researching.remaining))}
+                  </Text>
+                  <ResIcon id="goldCoin" size={13} />
+                </Button>
+              </Row>
             </>
           ) : (
-            <div className="row">
-              <button
-                disabled={!affordable}
-                onClick={() => store.act((s) => research(s, node.id))}
-              >
-                Chercher <span className="muted small">◇ {formatNum(cost)}</span>
-              </button>
-              {busyOther && <span className="muted small">Une recherche est déjà en cours</span>}
-            </div>
+            <Row>
+              <Button disabled={!affordable} onPress={() => store.act((s) => research(s, node.id))}>
+                <Text style={S.buttonText}>Chercher</Text>
+                <Text style={[S.muted, S.small]}>◇ {formatNum(cost)}</Text>
+              </Button>
+              {busyOther && <Muted>Une recherche est déjà en cours</Muted>}
+            </Row>
           )}
         </>
       )}
-    </div>
+    </Card>
   );
 }

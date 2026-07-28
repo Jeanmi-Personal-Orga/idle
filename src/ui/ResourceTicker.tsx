@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import { Text, View } from 'react-native';
 import { formatNum } from '../game/engine';
 import { RESOURCES, type ResourceId } from '../game/resources';
 import { useGame } from '../game/store';
 import { ResIcon } from './ResIcon';
+import { C } from './theme';
 
 /**
- * Compteur animé d'une ressource : à chaque gain, le montant s'affiche en vert
- * au-dessus et l'icône tressaille. Sans ça, un butin qui tombe pendant qu'on
- * regarde le combat passe complètement inaperçu.
+ * Compteur d'une ressource : à chaque gain, le montant s'affiche en vert au-dessus.
+ * Sans ça, un butin qui tombe pendant qu'on regarde le combat passe inaperçu.
  *
- * L'animation est purement locale : rien n'est stocké dans la sauvegarde.
+ * L'annonce est purement locale : rien n'est stocké dans la sauvegarde.
  */
 
 interface Gain {
@@ -32,24 +33,44 @@ export function ResourceTicker({ id }: { id: ResourceId }) {
     if (delta <= 0 || delta < 0.5) return;
     const gain = { id: ++nextId.current, amount: delta };
     setGains((list) => [...list, gain].slice(-3));
-    const timer = window.setTimeout(
-      () => setGains((list) => list.filter((g) => g.id !== gain.id)),
-      900,
-    );
-    return () => window.clearTimeout(timer);
+    const timer = setTimeout(() => setGains((list) => list.filter((g) => g.id !== gain.id)), 900);
+    return () => clearTimeout(timer);
   }, [value]);
 
-  const def = RESOURCES.find((r) => r.id === id)!;
+  const def = RESOURCES.find((r) => r.id === id);
 
   return (
-    <span className={`ticker res-${id}`} title={`${def.name} — ${def.use}`}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
       <ResIcon id={id} />
-      <span className={gains.length ? 'bumped' : undefined}> {formatNum(value)}</span>
-      {gains.map((g) => (
-        <em key={g.id} className="gain">
-          +{formatNum(g.amount)}
-        </em>
-      ))}
-    </span>
+      <Text style={{ color: def?.color ? tint(id) : C.fg, fontSize: 12.5, fontVariant: ['tabular-nums'] }}>
+        {formatNum(value)}
+      </Text>
+      {gains.length > 0 && (
+        <Text style={{ position: 'absolute', top: -12, right: 0, fontSize: 11, color: C.essence }}>
+          +{formatNum(gains[gains.length - 1].amount)}
+        </Text>
+      )}
+    </View>
   );
+}
+
+/**
+ * Couleur du compteur. Les variables CSS n'existent plus : la palette vient du
+ * thème, et chaque monnaie garde la teinte de son liquide.
+ */
+function tint(id: ResourceId): string {
+  switch (id) {
+    case 'essence':
+      return C.essence;
+    case 'reagent':
+      return C.reagent;
+    case 'insight':
+      return C.insight;
+    case 'shard':
+      return C.shard;
+    case 'catalyst':
+      return C.catalyst;
+    case 'goldCoin':
+      return C.goldCoin;
+  }
 }

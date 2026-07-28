@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
 import {
   KEYS_PER_DAY,
   campaignDef,
@@ -8,32 +10,30 @@ import {
 import { allMissionsWon, formatNum, keysLeft, loseMission, startMission } from '../game/engine';
 import { heroStats, powerScore, recommendedPower } from '../game/formulas';
 import { districtLabel } from '../game/content';
-import { useState } from 'react';
 import { store, useGame } from '../game/store';
-import { MissionPopup } from './BrumeView';
+import { ContractPopup } from './BrumeView';
 import { Arena, FighterBar } from './Arena';
 import { ResIcon } from './ResIcon';
+import { Bar, Button, Card, Label, Muted, Row } from './kit';
+import { C, S } from './theme';
 
 /**
  * Les missions du jour : **trois tirages quotidiens**, un par monnaie, dont le
- * chapitre et le nombre de vagues changent chaque jour. Le combat est celui de
- * la brume — même approche, mêmes boîtes de collision, même respiration entre
- * les vagues — mais sur son propre front : la brume continue pendant ce temps.
+ * chapitre et le nombre de vagues changent chaque jour. Le combat est celui de la
+ * brume — même approche, mêmes boîtes de collision, même respiration entre les
+ * vagues — mais sur son propre front : la brume continue pendant ce temps.
  *
- * L'économie des clés : une clé par tentative, **rendue en cas de défaite**. On
- * ne perd donc une clé qu'en remportant une mission, et rater n'a jamais fermé
- * la journée. Trois clés offertes par jour, et les trois missions ensemble paient
- * une prime — une seule fois. Au-delà, une mission déjà remportée se rejoue pour
- * sa récompense, ce qui donne un usage aux clés achetées au comptoir (en argent
- * réel, comme les sacs d'or).
+ * L'économie des clés : une clé par tentative, **rendue en cas de défaite**. On ne
+ * perd donc une clé qu'en remportant une mission, et rater n'a jamais fermé la
+ * journée. Trois clés offertes par jour, et les trois missions ensemble paient une
+ * prime — une seule fois. Au-delà, une mission déjà remportée se rejoue pour sa
+ * récompense, ce qui donne un usage aux clés achetées au comptoir.
  */
 export function CampaignView() {
   const state = useGame();
   const [showContract, setShowContract] = useState(false);
   const active = state.mission;
   const power = powerScore(heroStats(state));
-  // Les deux réserves comptent pareil pour partir en mission ; on les détaille
-  // seulement pour que le joueur voie ce qui vient de son achat.
   const keys = keysLeft(state);
   const bought = state.keys?.bought ?? 0;
   const missions = state.daily?.missions ?? [];
@@ -41,51 +41,59 @@ export function CampaignView() {
   const bonus = dailyBonus(missions);
 
   return (
-    <div className="view">
-      <div className="card">
-        <div className="row between">
-          <div className="label">Missions du jour</div>
-          <div className="right">
-            <b>
+    <ScrollView contentContainerStyle={S.view}>
+      <Card>
+        <Row between>
+          <Label>Missions du jour</Label>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={S.bold}>
               🔑 {state.keys?.left ?? 0} / {KEYS_PER_DAY}
-              {bought > 0 && ` + ${bought}`}
-            </b>
-            <div className="muted small">{bought > 0 ? 'du jour + achetées' : 'clés du jour'}</div>
-          </div>
-        </div>
-        <div className="muted small">
+              {bought > 0 ? ` + ${bought}` : ''}
+            </Text>
+            <Muted>{bought > 0 ? 'du jour + achetées' : 'clés du jour'}</Muted>
+          </View>
+        </Row>
+        <Muted>
           Trois missions retirées au sort chaque jour. Une clé par tentative, rendue si
           tu tombes : seule une victoire consomme une clé. Tout est payé à la dernière
           vague. Trois clés offertes à minuit, heure de Paris — et une mission déjà
           remportée se rejoue contre une clé.
-        </div>
+        </Muted>
 
         {/* La prime des trois : le vrai objectif de la journée. */}
-        <div className="row between">
-          <div>
-            <b>Prime des trois missions</b>
-            <div className="muted small">
-              {state.daily?.bonusPaid ? 'Déjà touchée aujourd’hui' : `${won} / ${missions.length} remportées`}
-            </div>
-          </div>
-          <div className={`small ${allMissionsWon(missions) ? 'better' : ''}`}>
-            <ResIcon id="essence" size={13} /> {formatNum(bonus.essence)}{' '}
-            <ResIcon id="reagent" size={13} /> {formatNum(bonus.reagent)}{' '}
-            <ResIcon id="insight" size={13} /> {formatNum(bonus.insight)}{' '}
-            <ResIcon id="catalyst" size={13} /> {bonus.catalyst}
-          </div>
-        </div>
+        <Row between>
+          <View style={{ flex: 1 }}>
+            <Text style={S.bold}>Prime des trois missions</Text>
+            <Muted>
+              {state.daily?.bonusPaid
+                ? 'Déjà touchée aujourd’hui'
+                : `${won} / ${missions.length} remportées`}
+            </Muted>
+          </View>
+          <Row style={{ gap: 4 }}>
+            <ResIcon id="essence" size={13} />
+            <Text style={[S.text, S.small, allMissionsWon(missions) && { color: C.better }]}>
+              {formatNum(bonus.essence)}
+            </Text>
+            <ResIcon id="reagent" size={13} />
+            <Text style={[S.text, S.small]}>{formatNum(bonus.reagent)}</Text>
+            <ResIcon id="insight" size={13} />
+            <Text style={[S.text, S.small]}>{formatNum(bonus.insight)}</Text>
+            <ResIcon id="catalyst" size={13} />
+            <Text style={[S.text, S.small]}>{bonus.catalyst}</Text>
+          </Row>
+        </Row>
 
-        {/* Le contrat du chapitre vit ici, avec les missions : c'est le même
-            genre d'objectif, et il n'avait rien à faire au-dessus du combat. */}
-        <button className="ghost" onClick={() => setShowContract(true)}>
-          🎯 Contrat du chapitre
-          {state.pendingContract && <em className="badge dot" />}
-        </button>
-      </div>
+        {/* Le contrat du chapitre vit ici, avec les missions : c'est le même genre
+            d'objectif, et il n'avait rien à faire au-dessus du combat. */}
+        <Button tone="ghost" onPress={() => setShowContract(true)}>
+          <Text style={S.buttonText}>🎯 Contrat du chapitre</Text>
+          {state.pendingContract && <Text style={{ color: C.essence }}>●</Text>}
+        </Button>
+      </Card>
 
       {showContract && (
-        <MissionPopup best={state.combat.best} onClose={() => setShowContract(false)} />
+        <ContractPopup best={state.combat.best} onClose={() => setShowContract(false)} />
       )}
 
       {missions.map((mission) => {
@@ -98,41 +106,45 @@ export function CampaignView() {
         const reward = missionRewards(mission);
 
         return (
-          <div className={`card ${running ? 'lab-card' : ''}`} key={mission.id}>
-            <div className="row between">
-              <div>
-                <div className="label">{campaign.name}</div>
-                <div className="muted small">{campaign.blurb}</div>
-              </div>
-              <div className={`small ${ready ? 'better' : 'worse'}`}>
+          <Card key={mission.id} style={running ? { borderColor: C.essence } : undefined}>
+            <Row between>
+              <View style={{ flex: 1 }}>
+                <Label>{campaign.name}</Label>
+                <Muted>{campaign.blurb}</Muted>
+              </View>
+              <Text style={[S.small, { color: ready ? C.better : C.worse }]}>
                 Conseillé {formatNum(advised)}
-              </div>
-            </div>
+              </Text>
+            </Row>
 
-            <div className="row between">
-              <div className="muted small">
+            <Row between>
+              <Muted>
                 {mission.waves} vagues · {districtLabel(mission.district)}
-              </div>
-              <div className="small">
-                <ResIcon id="essence" size={13} /> {formatNum(reward.essence)}{' '}
-                <ResIcon id="reagent" size={13} /> {formatNum(reward.reagent)}{' '}
-                <ResIcon id="insight" size={13} /> {formatNum(reward.insight)}
-              </div>
-            </div>
+              </Muted>
+              <Row style={{ gap: 4 }}>
+                <ResIcon id="essence" size={13} />
+                <Text style={[S.text, S.small]}>{formatNum(reward.essence)}</Text>
+                <ResIcon id="reagent" size={13} />
+                <Text style={[S.text, S.small]}>{formatNum(reward.reagent)}</Text>
+                <ResIcon id="insight" size={13} />
+                <Text style={[S.text, S.small]}>{formatNum(reward.insight)}</Text>
+              </Row>
+            </Row>
 
             {running ? (
               <MissionFight mission={mission} />
             ) : (
               <MissionButton mission={mission} busy={Boolean(active)} keys={keys} />
             )}
-          </div>
+          </Card>
         );
       })}
-    </div>
+      <View style={{ height: 8 }} />
+    </ScrollView>
   );
 }
 
-/** Issue de la mission, et de quoi la relancer tant qu'elle n'est pas gagnée. */
+/** Issue de la mission, et de quoi la relancer. */
 function MissionButton({
   mission,
   busy,
@@ -145,33 +157,35 @@ function MissionButton({
   return (
     <>
       {mission.status === 'won' && (
-        <div className="row between mission-result won">
-          <b>Victoire</b>
-          <span className="muted small">Rejouable contre une clé</span>
-        </div>
+        <Row between style={{ borderWidth: 1, borderColor: C.essence, borderRadius: 10, padding: 8 }}>
+          <Text style={[S.bold, { color: C.essence }]}>Victoire</Text>
+          <Muted>Rejouable contre une clé</Muted>
+        </Row>
       )}
       {mission.status === 'lost' && (
-        <div className="row between mission-result lost">
-          <b>Défaite</b>
-          <span className="muted small">Clé rendue, à retenter</span>
-        </div>
+        <Row between style={{ borderWidth: 1, borderColor: '#7a4a4a', borderRadius: 10, padding: 8 }}>
+          <Text style={[S.bold, { color: C.worse }]}>Défaite</Text>
+          <Muted>Clé rendue, à retenter</Muted>
+        </Row>
       )}
-      <button
-        className="ascend"
+      <Button
+        tone="primary"
         disabled={busy || keys < 1}
-        onClick={() => store.act((st) => startMission(st, mission.id))}
+        onPress={() => store.act((st) => startMission(st, mission.id))}
       >
-        {busy
-          ? 'Une mission est en cours'
-          : keys < 1
-            ? 'Plus de clé — le comptoir en vend'
-            : mission.status === 'lost'
-              ? 'Retenter'
-              : mission.status === 'won'
-                ? 'Rejouer'
-                : 'Partir'}
-        {!busy && keys > 0 && <span className="muted small">🔑 1</span>}
-      </button>
+        <Text style={[S.buttonText, S.buttonTextPrimary]}>
+          {busy
+            ? 'Une mission est en cours'
+            : keys < 1
+              ? 'Plus de clé — le comptoir en vend'
+              : mission.status === 'lost'
+                ? 'Retenter'
+                : mission.status === 'won'
+                  ? 'Rejouer'
+                  : 'Partir'}
+        </Text>
+        {!busy && keys > 0 && <Text style={[S.muted, S.small]}>🔑 1</Text>}
+      </Button>
     </>
   );
 }
@@ -182,21 +196,20 @@ function MissionButton({
  */
 function MissionFight({ mission }: { mission: DailyMission }) {
   const state = useGame();
-  const m = state.mission!;
+  const m = state.mission;
   const s = heroStats(state);
+  if (!m) return null;
 
   return (
     <>
-      <div className="bar">
-        <div className="fill hero" style={{ width: `${(m.wave / m.waves) * 100}%` }} />
-      </div>
-      <div className="muted small">
+      <Bar ratio={m.wave / m.waves} color={C.essence} />
+      <Muted>
         Vague {m.wave} / {m.waves}
-      </div>
+      </Muted>
 
       <Arena fight={m} scope="mission" district={mission.district} />
 
-      <div className="bars">
+      <Row style={{ alignItems: 'flex-start', gap: 12 }}>
         <FighterBar side="hero" name="Toi" hp={m.hero.hp} max={s.health} />
         <FighterBar
           side="foe"
@@ -204,16 +217,16 @@ function MissionFight({ mission }: { mission: DailyMission }) {
           hp={m.enemies.reduce((sum, e) => sum + Math.max(0, e.hp), 0)}
           max={Math.max(1, m.enemies.reduce((sum, e) => sum + e.maxHp, 0))}
         />
-      </div>
+      </Row>
 
-      <button
-        className="ghost"
-        onClick={() =>
+      <Button
+        tone="ghost"
+        onPress={() =>
           store.act((st) => loseMission(st, 'Mission abandonnée : défaite, clé rendue.'))
         }
       >
         Abandonner
-      </button>
+      </Button>
     </>
   );
 }

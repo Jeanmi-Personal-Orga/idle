@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "L'Alchimiste de Brume",
+    "slug": "alchimiste-de-brume",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "brume",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "backgroundColor": "#1a1d26",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jeanmi.alchimistedebrume",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.jeanmi.alchimistedebrume",
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "backgroundColor": "#1a1d26"
+      }
+    },
+    "extra": {
+      "apiUrl": "http://localhost:3001",
+      "eas": {
+        "projectId": "6f939469-e9ef-4d01-9b16-5cbeab269fec"
+      }
+    }
+  }
+}

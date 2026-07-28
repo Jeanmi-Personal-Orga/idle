@@ -20,8 +20,6 @@ export const GOLD_PACKS: GoldPack[] = [
   { id: 'bourse', gold: 650, bonus: 50, price: '4,99 €' },
   { id: 'coffre', gold: 1400, bonus: 200, price: '9,99 €' },
   { id: 'sac', gold: 3000, bonus: 600, price: '19,99 €' },
-  // Les deux gros lots gardent la pente dégressive : 160 puis 170 sacs par euro,
-  // contre 60 pour la poignée d'entrée.
   { id: 'malle', gold: 8000, bonus: 1800, price: '49,99 €' },
   { id: 'cale', gold: 17000, bonus: 4500, price: '99,99 €' },
 ];

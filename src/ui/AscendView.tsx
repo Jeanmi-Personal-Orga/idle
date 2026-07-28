@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Alert, ScrollView, Text, View } from 'react-native';
 import {
   ASCEND_UNLOCK_DISTRICT,
   LEGACIES,
@@ -16,7 +17,13 @@ import { DISTRICTS, districtLabel } from '../game/content';
 import { ascend, formatNum } from '../game/engine';
 import { store, useGame } from '../game/store';
 import { LegacyWall } from './LegacyWall';
+import { Bar, Button, Card, Label, Muted, Row } from './kit';
+import { C, S } from './theme';
 
+/**
+ * La dissolution : on casse son propre laboratoire pour en tirer des éclats, et
+ * des legs qui traversent les parties.
+ */
 export function AscendView() {
   const state = useGame();
   const unlocked = hasUnlockedAscension(state);
@@ -29,123 +36,105 @@ export function AscendView() {
   const cost = legacyCost(legacy, level);
   const affordable = canBuyLegacy(state, legacy);
 
-  return (
-    <div className="view">
-      {/* Écran sombre, le chaudron se vide, les éclats montent (§6). */}
-      <div className="card scene dissolve-scene">
-        {state.ascension.count > 0 && (
-          <div className="shards" aria-hidden="true">
-            {Array.from({ length: 9 }, (_, i) => (
-              <i
-                key={i}
-                style={{
-                  left: `${8 + i * 10.5}%`,
-                  animationDelay: `${(i * 0.37).toFixed(2)}s`,
-                }}
-              />
-            ))}
-          </div>
-        )}
+  /**
+   * La dissolution est irréversible : on demande confirmation. `Alert` remplace le
+   * `confirm()` du navigateur, qui n'existe pas en natif.
+   */
+  const confirmAscend = () =>
+    Alert.alert(
+      'Dissoudre le laboratoire ?',
+      `Tu récupères ${gain} éclats. La progression matérielle repart de zéro.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Dissoudre', style: 'destructive', onPress: () => store.act(ascend) },
+      ],
+    );
 
-        <div className="row between">
-          <div>
-            <div className="label">Dissolution</div>
-            <div className="muted small">
+  return (
+    <ScrollView contentContainerStyle={S.view}>
+      <Card style={{ backgroundColor: '#171a24' }}>
+        <Row between>
+          <View>
+            <Label>Dissolution</Label>
+            <Muted>
               {state.ascension.count === 0
                 ? 'Jamais dissous'
                 : `${state.ascension.count} dissolution(s) · écho +${Math.round(
                     state.ascension.count * 12,
                   )} %`}
-            </div>
-          </div>
-          <div className="right">
-            <div className="label res-shard">✧ {formatNum(state.resources.shard)}</div>
-            <div className="muted small">éclats</div>
-          </div>
-        </div>
+            </Muted>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[S.label, { color: C.shard }]}>
+              ✧ {formatNum(state.resources.shard)}
+            </Text>
+            <Muted>éclats</Muted>
+          </View>
+        </Row>
 
         {!unlocked ? (
-          <div className="muted small">
+          <Muted>
             Verrouillé. Atteins {DISTRICTS[ASCEND_UNLOCK_DISTRICT].name} une fois pour
             apprendre à dissoudre ton propre laboratoire.
-          </div>
+          </Muted>
         ) : (
           <>
-            <div className="muted small">
+            <Muted>
               Repartent de zéro : essence, réactifs, élixirs, districts, laboratoire.
-              <br />
-              Restent acquis : Lucidité et recherche, éclats, legs, écho des dissolutions.
-            </div>
-            <button
-              className="ascend"
-              disabled={gain <= 0}
-              onClick={() => {
-                if (
-                  confirm(
-                    `Dissoudre le laboratoire pour ${gain} éclats ? La progression matérielle repart de zéro.`,
-                  )
-                ) {
-                  store.act(ascend);
-                }
-              }}
-            >
-              Dissoudre <span className="muted small">✧ {formatNum(gain)}</span>
-            </button>
-            <div className="muted small">
+              {'\n'}
+              Restent acquis : recherche, éclats, legs, écho des dissolutions.
+            </Muted>
+            <Button tone="primary" disabled={gain <= 0} onPress={confirmAscend}>
+              <Text style={[S.buttonText, S.buttonTextPrimary]}>Dissoudre</Text>
+              <Text style={[S.muted, S.small]}>✧ {formatNum(gain)}</Text>
+            </Button>
+            <Muted>
               En poussant jusqu'à {districtLabel(state.combat.district + 1)} : ✧{' '}
               {formatNum(next)}.
-            </div>
+            </Muted>
           </>
         )}
-      </div>
+      </Card>
 
       {/* Le mur du fond : les six legs, éteints ou illuminés. */}
-      <div className="card">
-        <div className="label">Le mur des legs</div>
+      <Card>
+        <Label>Le mur des legs</Label>
         <LegacyWall state={state} selected={selected} onSelect={setSelected} />
 
-        <div className="row between">
-          <div>
-            <b className={level > 0 ? 'res-shard' : undefined}>{legacy.name}</b>
-            <div className="muted small">
-              {level > 0 ? legacy.effect(level) : 'jamais scellé'}
-            </div>
-          </div>
-          <div className="label">
+        <Row between>
+          <View style={{ flex: 1 }}>
+            <Text style={[S.bold, level > 0 && { color: C.shard }]}>{legacy.name}</Text>
+            <Muted>{level > 0 ? legacy.effect(level) : 'jamais scellé'}</Muted>
+          </View>
+          <Text style={S.label}>
             {level} / {legacy.max}
-          </div>
-        </div>
+          </Text>
+        </Row>
 
-        <div className="bar">
-          <div
-            className="fill"
-            style={{ width: `${(level / legacy.max) * 100}%`, background: 'var(--shard)' }}
-          />
-        </div>
+        <Bar ratio={level / legacy.max} color={C.shard} />
 
         {maxed ? (
-          <div className="muted small">Legs complet.</div>
+          <Muted>Legs complet.</Muted>
         ) : (
           <>
-            <div className="muted small">Prochain : {legacy.effect(level + 1)}</div>
-            <div className="row">
-              <button
+            <Muted>Prochain : {legacy.effect(level + 1)}</Muted>
+            <Row>
+              <Button disabled={!affordable} onPress={() => store.act((s) => buyLegacy(s, legacy.id))}>
+                <Text style={S.buttonText}>Sceller</Text>
+                <Text style={[S.muted, S.small]}>✧ {formatNum(cost)}</Text>
+              </Button>
+              <Button
+                tone="ghost"
                 disabled={!affordable}
-                onClick={() => store.act((s) => buyLegacy(s, legacy.id))}
-              >
-                Sceller <span className="muted small">✧ {formatNum(cost)}</span>
-              </button>
-              <button
-                className="ghost"
-                disabled={!affordable}
-                onClick={() => store.act((s) => buyLegacyMax(s, legacy.id))}
+                onPress={() => store.act((s) => buyLegacyMax(s, legacy.id))}
               >
                 Max
-              </button>
-            </div>
+              </Button>
+            </Row>
           </>
         )}
-      </div>
-    </div>
+      </Card>
+      <View style={{ height: 8 }} />
+    </ScrollView>
   );
 }

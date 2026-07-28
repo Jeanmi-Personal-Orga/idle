@@ -1,41 +1,7 @@
+# Depuis le passage à React Native, seul le service de comptes tourne en conteneur :
+# une application native se construit avec la chaîne Expo (`npm run android`,
+# `npm run ios`, ou EAS), pas dans une image Docker.
 services:
-  # --- Web : bundle statique servi par nginx sur http://localhost:8080 ---
-  # docker compose up web   (démarre aussi db et api : le compte joueur en a besoin)
-  web:
-    build:
-      context: .
-      dockerfile: docker/web.Dockerfile
-      target: serve
-    image: alchimiste-de-brume
-    ports:
-      # Port hôte surchargeable : WEB_PORT=8081 docker compose up web
-      - '${WEB_PORT:-8080}:80'
-    depends_on:
-      - api
-    restart: unless-stopped
-
-  # --- Développement : vite avec rechargement à chaud sur http://localhost:5173 ---
-  # docker compose --profile dev up dev   (démarre aussi db et api)
-  # Écoute sur 0.0.0.0 : l'URL est aussi ouvrable depuis un téléphone du même réseau.
-  dev:
-    build:
-      context: .
-      dockerfile: docker/dev.Dockerfile
-    image: alchimiste-de-brume-dev
-    ports:
-      # Port hôte surchargeable, pour cohabiter avec un vite lancé localement :
-      # DEV_PORT=5174 docker compose --profile dev up -d dev
-      - '${DEV_PORT:-5173}:5173'
-    volumes:
-      - .:/app
-      # node_modules vient de l'image, pas de l'hôte : les binaires natifs
-      # compilés pour la machine ne sont pas compatibles avec Alpine. Docker
-      # remplit ce volume nommé depuis l'image à sa première utilisation.
-      - devmodules:/app/node_modules
-    depends_on:
-      - api
-    profiles: ['dev']
-
   # --- Base de données : PostgreSQL pour les comptes joueurs ---
   # docker compose up -d db
   db:
@@ -53,8 +19,12 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # --- API : authentification (login/signup) sur http://localhost:3001 ---
+  # --- API : comptes et sauvegarde cloud, sur http://localhost:3001 ---
   # docker compose up -d db api
+  #
+  # Depuis un téléphone, `localhost` désigne le téléphone : mettre l'IP de la
+  # machine de développement dans `extra.apiUrl` (app.json) pour tester sur
+  # appareil.
   api:
     build:
       context: .
@@ -65,40 +35,12 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-alchimiste}:${POSTGRES_PASSWORD:-alchimiste}@db:5432/${POSTGRES_DB:-alchimiste_auth}
-      # Secret de dev uniquement : à surcharger avec une vraie valeur avant
-      # tout déploiement réel (JWT_SECRET=... docker compose up -d api).
+      # Secret de dev uniquement : à surcharger avec une vraie valeur avant tout
+      # déploiement réel (JWT_SECRET=... docker compose up -d api).
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
     ports:
       - '${API_PORT:-3001}:3001'
     restart: unless-stopped
 
-  # --- Android : dépose out/app-debug.apk puis s'arrête ---
-  # docker compose --profile android run --rm android
-  android:
-    build:
-      context: .
-      dockerfile: docker/android.Dockerfile
-      target: android
-    image: alchimiste-de-brume-android
-    command: sh -c "cp android/app/build/outputs/apk/debug/app-debug.apk /out/ && echo 'APK dans ./out/app-debug.apk'"
-    volumes:
-      - ./out:/out
-    profiles: ['android']
-
-  # --- iOS : dépose out/ios/ à ouvrir dans Xcode sur un Mac ---
-  # docker compose --profile ios run --rm ios
-  # La compilation iOS elle-même est impossible en conteneur (Xcode, macOS).
-  ios:
-    build:
-      context: .
-      dockerfile: docker/ios.Dockerfile
-      target: build
-    image: alchimiste-de-brume-ios
-    command: sh -c "cp -r ios dist /out/ && echo 'Projet iOS dans ./out/ios — à ouvrir dans Xcode sur un Mac'"
-    volumes:
-      - ./out:/out
-    profiles: ['ios']
-
 volumes:
-  devmodules:
   postgres-data:

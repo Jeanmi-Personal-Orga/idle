@@ -2,7 +2,7 @@
 
 Idle RPG inspiré de *Forge Master*, transposé dans une ville engloutie par la brume.
 Tu distilles des élixirs dans ton laboratoire ; ton alchimiste descend seul dans les
-quartiers noyés. Web d'abord, iOS/Android via Capacitor — un seul code.
+quartiers noyés. **Application React Native** (Expo), pour iOS et Android.
 
 ## Boucle de jeu
 
@@ -61,12 +61,12 @@ prestige plafonnerait à la fin du contenu et n'aurait plus rien à mordre.
 
 | Règle du document | État |
 | --- | --- |
-| Palette (brume, pierre noyée, cuir, verre) et **seuls les liquides saturés** | ✅ variables CSS |
+| Palette (brume, pierre noyée, cuir, verre) et **seuls les liquides saturés** | ✅ `src/ui/theme.ts` |
 | Brume : un canvas unique en surcouche, 15 %, coupé quand l'onglet perd le focus | ✅ `src/ui/Fog.tsx` |
 | Scène de combat de profil, 3 couches, ennemi qui sort de la brume | ✅ |
 | Lanterne qui s'éteint à la mort → la scène s'assombrit | ✅ |
 | Chiffres de dégâts : montée + fondu, critiques 1,4× et en jaune | ✅ `CombatEvent` → `store.hits` |
-| Cycles supérieurs : même silhouette, teinte violette + contour | ✅ filtre CSS |
+| Cycles supérieurs : même silhouette, légèrement voilée | ✅ opacité |
 | Chaudron-alambic : **le niveau de la fiole EST la barre de progression** | ✅ `src/ui/Cauldron.tsx` |
 | Foyer éteint quand les réactifs manquent, vapeur colorée par le palier probable | ✅ |
 | La pièce grandit par paliers de niveau (étagères, alambics, chat, tuyauterie) | ✅ 11 / 26 / 51 / 100 |
@@ -97,37 +97,50 @@ qu'elle traverse**, parce que les deux formats ne se rangent pas pareil : une
 animation de personnage est une ligne d'une planche unique, alors qu'un ennemi a
 un fichier par animation, dont la largeur de case lui est propre.
 
+En natif il n'y a pas de `background-position` : chaque sprite met la planche
+entière dans une `Image` plus grande que sa boîte, décalée pour cadrer la bonne
+case, et la boîte coupe le reste. Les planches sont déclarées une à une dans
+`src/game/images.ts` (`node scripts/asset-registry.mjs` régénère la table) : Metro
+exige des `require` littéraux, là où le web construisait ses URL à la volée.
+
 L'échelle vient de la famille, pas d'une hauteur imposée : un personnage 32 px
 s'affiche à 96, une icône 96 px à 64. Sans ça, un rat ferait la taille d'un
 chevalier. Les gardiens de fin de district sont agrandis de 30 %.
 
-Le miroir de l'ennemi est appliqué **au dessin**, pas à la boîte : la boîte porte
-l'animation d'entrée, et une animation de `transform` écraserait un miroir posé
-au même endroit. Toutes les animations sont désactivées sous
-`prefers-reduced-motion`, et aucune ne tourne quand l'onglet est masqué.
+Le miroir de l'ennemi s'applique à sa boîte : l'image à l'intérieur étant
+positionnée en absolu, rien ne vient écraser cette transformation. Les animations
+d'images s'arrêtent quand l'application passe en arrière-plan, avec la boucle de
+jeu.
 
 ### L'arène
 
 Les deux combattants sont sur **une seule scène**, devant un décor de forêt en
 cinq couches. Le déroulé d'une vague :
 
-1. l'ennemi sort de la brume à droite, le héros attend à gauche ;
+1. l'ennemi entre par la droite, le héros attend à gauche ;
 2. ceux qui se battent au contact **marchent l'un vers l'autre** — à mi-chemin si
    les deux avancent, jusqu'à l'autre si un seul avance ;
-3. arrivés au contact ils y restent et échangent les coups jusqu'à la mort.
+3. arrivés au contact, boîtes à quatre pixels l'une de l'autre, ils échangent les
+   coups jusqu'à la mort ;
+4. un rang tombe : le héros franchit un pas jusqu'au suivant, et ne frappe pas
+   pendant ce pas ;
+5. vague nettoyée — ou héros tombé — l'écran passe au noir, la scène se remet en
+   ordre, la suivante entre par la droite.
 
-La marche est lente et régulière : 46 px/s, soit ~1,6 s pour traverser. La durée
-vient de la distance, pas d'un délai fixe, sinon les longues distances se
-téléportent. Les à-coups de combat, eux, sont courts et secs (110 ms).
+Rien n'est mesuré à l'écran : positions, distances et boîtes de collision sont
+**calculées** (`src/ui/arena-geometry.ts`, vérifié par `npm run geometry`). Les
+boîtes valent 80 % de la case du sprite pour le héros, 45 % pour les créatures — les
+planches laissent beaucoup de vide autour du dessin, bien plus pour elles.
 
-Un combattant à distance ne bouge jamais : c'est l'autre qui vient le chercher.
-Les quatre personnages jouables sont au contact, donc ce sont les bestioles
-volantes — araignée, abeille — qui obligent le joueur à traverser.
+Un combattant à distance ne bouge jamais : c'est l'autre qui vient le chercher. Les
+quatre personnages jouables sont au contact, donc ce sont les créatures volantes qui
+obligent le joueur à traverser.
 
-Quand un coup porte, on le voit : la cible blanchit une fraction de seconde, un
-éclat s'ouvre au point d'impact, la cible recule de quelques pixels, le chiffre
-de dégâts monte et s'efface, et la scène tremble quand c'est le joueur qui
-encaisse.
+Quand un coup porte, on le voit : la cible blanchit une fraction de seconde, recule
+de quelques pixels, le chiffre de dégâts monte et s'efface, et un voile rouge passe
+quand c'est le joueur qui encaisse. Le bouton ▣ de la scène trace les boîtes de
+collision et les marques d'arrivée, pour regarder la géométrie au lieu de la
+déduire.
 
 C'est de la **mise en scène** : le moteur ne connaît que des cadences de frappe,
 le déplacement les suit sans changer aucun résultat. L'équilibrage simulé sur
@@ -190,104 +203,90 @@ versionné. Ce qui est versionné, c'est le sous-ensemble servi par le jeu, dans
 
 ## Développement
 
+Le projet est une application **React Native**, gérée par Expo. Il n'y a plus de
+version web : ni Vite, ni Capacitor, ni `index.html`.
+
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # typecheck + bundle dans dist/
-npm run lint
-npm run smoke    # monte l'app dans un DOM sans navigateur et visite les 5 onglets
+npm start          # serveur de développement Expo (QR code, rechargement à chaud)
+npm run android    # compile et lance sur un appareil ou un émulateur Android
+npm run ios        # idem sur iOS (macOS et Xcode requis)
+npm run prebuild   # génère les projets natifs android/ et ios/
 ```
 
-### Le test de fumée, et pourquoi il existe
-
-`npm run smoke` monte l'application entière dans un DOM sans navigateur (jsdom),
-part d'une sauvegarde d'avant-dernière version — la migration est donc couverte —
-puis visite les cinq onglets, lance une mission et achète au comptoir. Il échoue
-si une exception de rendu survient ou si un écran reste vide.
-
-Il existe parce qu'un build vert ne dit rien du rendu : deux pannes d'écran noir
-de suite sont passées à travers `tsc`, `vite build` et `oxlint`. La première était
-une barre de vie qui lisait un ennemi disparu pendant le temps mort entre deux
-vagues ; la seconde une icône de monnaie sans définition, qui emportait tout
-l'onglet Campagnes. Les deux se voient ici en deux secondes.
-
-Ce qu'il ne fait pas : juger l'image. Les animations, les positions et le rendu
-des sprites ne se vérifient qu'à l'œil, dans un vrai navigateur.
-
-### Docker — une image par cible
-
-Trois Dockerfiles séparés dans `docker/`, orchestrés par `compose.yaml` :
-
-| Cible | Commande | Résultat |
-| --- | --- | --- |
-| **Web (production)** | `docker compose up web` | nginx sur http://localhost:8080 |
-| **Web (dev)** | `docker compose --profile dev up dev` | vite + rechargement à chaud sur http://localhost:5173, exposé au réseau local |
-| **Android** | `docker build -f docker/android.Dockerfile --target apk --output type=local,dest=./out .` | `out/app-debug.apk` |
-| **iOS** | `docker build -f docker/ios.Dockerfile --target project --output type=local,dest=./out .` | `out/ios/` à ouvrir dans Xcode |
-
-L'image web fait 48 Mo (nginx + bundle) : le jeu tourne entièrement côté navigateur,
-il n'y a aucun serveur applicatif à faire tourner. L'image Android fait ~4 Go
-(JDK 21 + SDK Android 36) et sa première construction prend une dizaine de
-minutes ; elle sort un APK debug signé de 4,2 Mo, vérifié.
-
-Le conteneur `dev` installe ses dépendances à la construction de l'image, pas au
-démarrage : un `npm install` rejoué à chaque `up` par-dessus un volume monté est
-lent et finit par casser. Après un changement de `package.json`, reconstruis-le
-avec `docker compose --profile dev up --build dev`.
-
-Le conteneur `dev` et un `npm run dev` lancé sur la machine se disputent le port
-5173 : `failed to bind host port [::]:5173/tcp: address already in use`. Coupe
-l'un des deux (`pkill -f vite`), ou donne un autre port hôte au conteneur :
+### Vérifications, et ce qu'elles couvrent
 
 ```bash
-DEV_PORT=5174 docker compose --profile dev up -d dev
-WEB_PORT=8081 docker compose up -d web
+npm run check      # tout : types, lint, moteur, géométrie, rendu
+npm run typecheck  # tsc
+npm run lint       # oxlint
+npm run engine     # règles de jeu simulées dans Node (progression, clés, combat)
+npm run geometry   # arithmétique de placement de l'arène
+npm test           # monte l'application entière hors appareil et visite les onglets
 ```
 
-C'est la seule cause connue d'échec de `-d` : le démarrage détaché fonctionne, y
-compris le rechargement à chaud (le dossier est monté, vite voit les fichiers).
+Trois de ces quatre vérifications existent parce qu'un build vert ne dit rien du
+comportement :
 
-**iOS : la compilation ne peut pas se faire dans Docker.** Xcode n'existe que sur
-macOS et sa licence interdit de l'exécuter ailleurs — il n'y a pas de
-contournement. L'image iOS fait donc tout ce qui est faisable sans Mac : bundle
-web + projet Capacitor complet, à copier sur un Mac puis ouvrir avec
-`open ios/App/App.xcodeproj`. Capacitor 8 passant par Swift Package Manager,
-aucun `pod install` n'est nécessaire.
+- **`npm run engine`** fait tourner le moteur dans Node — il est pur, sans DOM ni
+  React ni natif. C'est là qu'on vérifie la progression, l'économie des clés et les
+  règles de combat, avec un aléa fixe.
+- **`npm run geometry`** contrôle l'arithmétique de l'arène : écart au contact,
+  répartition de la marche, écart entre deux rangs. Elle a remplacé des mesures du
+  DOM après trois corrections successives qui se trompaient d'une largeur de sprite.
+- **`npm test`** monte l'application avec le rendu de test de React Native. Le
+  typechecker accepte `<div>` sans broncher ; React Native, non — ce test attrape
+  donc tout reste de web, comme il attrapait les écrans noirs de l'ancienne version.
 
-### Mobile en local (Capacitor, sans Docker)
+Ce qu'aucune ne fait : juger l'image. Animations, positions et rendu des sprites ne
+se vérifient qu'à l'œil, sur un appareil ou un émulateur.
+
+### Le service de comptes, en conteneur
+
+L'application native se construit avec la chaîne Expo, mais le serveur de comptes
+et sa base tournent toujours en Docker :
 
 ```bash
-npm run mobile:add:android   # crée le projet Android (Android Studio requis)
-npm run mobile:add:ios       # crée le projet iOS (Xcode requis, macOS)
-npm run mobile:sync          # rebuild + pousse dist/ dans les projets natifs
-npm run mobile:android       # sync + ouvre Android Studio
+docker compose up -d db api   # API sur http://localhost:3001
 ```
 
-Les dossiers `ios/` et `android/` sont générés à la demande, pas versionnés tant
-qu'on n'en a pas besoin.
+Depuis un téléphone, `localhost` désigne **le téléphone** : pour tester la connexion
+sur appareil, mettre l'IP de la machine de développement dans `extra.apiUrl`
+(`app.json`).
 
 ## Architecture
 
 ```
-src/game/
+index.js        Point d'entrée natif (registerRootComponent)
+app.json        Configuration Expo : nom, identifiants, extra.apiUrl
+src/game/       Le moteur — ni React, ni natif, ni DOM
   types.ts      Types du domaine (aucune logique)
   content.ts    Données : stats, paliers, emplacements, districts
   formulas.ts   Toutes les courbes : coûts, scaling ennemi, génération d'objets
   engine.ts     Simulation pure : step(state, dt), actions, formatage
-  store.ts      Boucle de jeu (pas fixe 10 Hz), sauvegarde, hooks React
+  campaigns.ts  Missions du jour : tirage déterministe, récompenses, prime
+  lab.ts        Tables de coût et de durée du laboratoire (module feuille)
   tech.ts       Arbre de recherche : nœuds, coûts, modificateurs temporaires
   ascension.ts  Dissolution : éclats, legs permanents, modificateurs définitifs
   modifiers.ts  mods(state) : point d'entrée unique des formules (recherche × legs)
-src/ui/         Vues Brume / Laboratoire / Élixirs / Recherche / Dissolution
-  Fog.tsx       La brume : canvas unique en surcouche
-  Sprite.tsx    Rendu des spritesheets HD
-  CharacterSelect.tsx  Le choix du personnage, au premier lancement
-  Cauldron.tsx  Le laboratoire en coupe : le chaudron raconte l'état du jeu
+  store.ts      Boucle de jeu (pas fixe 10 Hz), sauvegarde, hooks React
+  storage.ts    Stockage natif : cache synchrone au-dessus d'AsyncStorage
+  images.ts     Registre des planches (require littéraux, exigés par Metro)
+src/ui/         L'interface, en composants React Native
+  theme.ts      Palette et styles partagés — ce que faisaient les variables CSS
+  kit.tsx       Card, Row, Button, Popup… les briques communes
+  Arena.tsx     La scène de combat : marche, contact, rideau noir
+  arena-geometry.ts  Placement calculé : positions, distances, boîtes
+  Sprite.tsx    Découpe d'une case de planche, sans background CSS
+  Cauldron.tsx  Le laboratoire en coupe, en react-native-svg
   LegacyWall.tsx  Les six legs accrochés au mur, illuminés à l'achat
+src/__tests__/  Test de fumée : monte l'application hors appareil
+scripts/        Vérifications hors interface (moteur, géométrie, registre d'images)
 ```
 
-`engine.ts` et `formulas.ts` ne touchent ni au DOM ni à React : l'équilibrage se
-simule hors navigateur (`step()` en boucle) avant d'être vécu en jeu.
+Le moteur ne touche ni au natif ni à React : l'équilibrage se simule dans Node
+(`step()` en boucle) avant d'être vécu en jeu. Seuls `store.ts` et `auth.ts`
+dépendent de la plateforme, à travers `storage.ts`.
 
 ## Équilibrage mesuré
 

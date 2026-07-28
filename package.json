@@ -2,37 +2,49 @@
   "name": "alchimiste-de-brume",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild",
+    "typecheck": "tsc -b",
     "lint": "oxlint",
-    "preview": "vite preview",
-    "mobile:add:ios": "npm run build && npx cap add ios",
-    "mobile:add:android": "npm run build && npx cap add android",
-    "mobile:sync": "npm run build && npx cap sync",
-    "mobile:ios": "npm run mobile:sync && npx cap open ios",
-    "mobile:android": "npm run mobile:sync && npx cap open android",
-    "smoke": "esbuild --bundle --format=esm --platform=browser --jsx=automatic --define:process.env.NODE_ENV='\"development\"' --define:import.meta.env='{\"DEV\":true}' --outfile=node_modules/.smoke-bundle.mjs scripts/smoke.tsx && node scripts/smoke-host.mjs",
-    "geometry": "esbuild --bundle --format=esm --platform=node --outfile=node_modules/.geometry.mjs src/ui/arena-geometry.ts --log-level=error && node scripts/geometry-check.mjs"
+    "geometry": "esbuild --bundle --format=esm --platform=node --outfile=node_modules/.geometry.mjs src/ui/arena-geometry.ts --log-level=error && node scripts/geometry-check.mjs",
+    "engine": "esbuild --bundle --format=esm --platform=node --outfile=node_modules/.engine-check.mjs scripts/engine-check.ts --log-level=error && node node_modules/.engine-check.mjs",
+    "check": "npm run typecheck && npm run lint && npm run engine && npm run geometry && npm test",
+    "test": "jest --forceExit"
   },
   "dependencies": {
-    "@capacitor/android": "^8.4.2",
-    "@capacitor/core": "^8.4.2",
-    "@capacitor/ios": "^8.4.2",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "^57.0.8",
+    "expo-constants": "^57.0.7",
+    "expo-splash-screen": "^57.0.5",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.4.2",
+    "@babel/core": "^7.29.7",
+    "@expo/metro-runtime": "^57.0.7",
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "29.5.14",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
-    "oxlint": "^1.71.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.1.1",
+    "@types/react-test-renderer": "^19.1.0",
+    "babel-preset-expo": "^57.0.4",
     "esbuild": "^0.27.2",
-    "jsdom": "^30.0.0"
+    "jest": "^29.7.0",
+    "jest-expo": "^57.0.2",
+    "oxlint": "^1.71.0",
+    "react-test-renderer": "^19.2.0",
+    "typescript": "~6.0.2"
+  },
+  "main": "index.js",
+  "jest": {
+    "preset": "jest-expo",
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
+    ]
   }
 }
