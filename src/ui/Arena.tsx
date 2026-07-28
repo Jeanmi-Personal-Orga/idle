@@ -45,8 +45,8 @@ const CONTACT_REACH = 8;
 /*
  * Le resserrement n'est plus une constante : chaque créature a le sien, mesuré
  * dans son image (`HITBOX_INSETS` dans sprites.ts, via `scripts/hitboxes.mjs`).
- * Une valeur unique ne pouvait pas convenir — les marges vont de 0 % pour un
- * slime à 35 % pour un squelette.
+ * Une valeur unique ne pouvait pas convenir — les marges vont de 17 % pour un
+ * rôdeur à 35 % pour un squelette, et ne sont même pas symétriques.
  */
 
 /** Écart entre deux rangs de la file : assez serré pour que la vague reste groupée. */

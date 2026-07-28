@@ -74,7 +74,7 @@ prestige plafonnerait à la fin du contenu et n'aurait plus rien à mordre.
 | Encoches d'affinage sur le cadre, une par 5 niveaux | ✅ |
 | Recherche gravée sur papier huilé, nœuds acquis en ambre | ✅ |
 | Dissolution : écran sombre, éclats qui montent, **mur des six legs** | ✅ `src/ui/LegacyWall.tsx` |
-| Sprites pixel art : quatre personnages animés, slimes, bestioles, gardiens | ✅ |
+| Sprites pixel art : quatre personnages animés, sept ennemis animés, gardiens | ✅ |
 | Décor : cinq couches de forêt dans l'arène | ✅ |
 | Icônes d'équipement en sprites (planches `Equiptment`, `Potions`, `Jars`, `Gems`) | ⬜ pas encore branchées |
 
@@ -87,14 +87,15 @@ copié dans `public/sprites/` — 172 Ko en tout :
 | | |
 | --- | --- |
 | `chars/` | quatre planches 32 × 32, 10 × 7 cases : idle, marche, course, deux attaques, dégât, mort |
-| `foes/slimes.png` | dix slimes, deux poses chacun — debout et écrasé, soit un rebond |
-| `foes/critters.png` | rat, grenouille, araignée, abeille, ver… la piétaille |
+| `foes/bat`, `mushroom`, `golem`, `skeleton` | quatre ennemis animés : cinq bandes chacun (repos, marche, attaque, dégât, mort) |
+| `foes/golem-orange`, `skeleton-yellow` | variantes de couleur des mêmes packs, pour varier les vagues |
+| `foes/stalker` | rôdeur volant, qui frappe à distance |
 | `bg/forest-1..5.png` | cinq couches de forêt sombre, superposées dans l'arène |
 
 `src/game/sprites.ts` décrit chaque animation par **la liste explicite des cases
 qu'elle traverse**, parce que les deux formats ne se rangent pas pareil : une
-animation de personnage est une ligne continue, alors que les deux poses d'un
-slime sont à deux lignes d'écart.
+animation de personnage est une ligne d'une planche unique, alors qu'un ennemi a
+un fichier par animation, dont la largeur de case lui est propre.
 
 L'échelle vient de la famille, pas d'une hauteur imposée : un personnage 32 px
 s'affiche à 96, une icône 96 px à 64. Sans ça, un rat ferait la taille d'un
@@ -175,10 +176,13 @@ Les planches viennent de packs tiers déposés par le joueur dans `assets/`, non
 versionné. Ce qui est versionné, c'est le sous-ensemble servi par le jeu, dans
 `public/sprites/`. Deux points à trancher avant toute diffusion :
 
-- `slimes.png` et `critters.png` viennent de **Cauldron's Brew** (Plopstudio),
-  dont la licence autorise l'usage **non commercial** mais interdit la
-  redistribution. Un dépôt public ou une version commerciale demandent de les
-  remplacer.
+- `slimes.png` venait de **Cauldron's Brew** (Plopstudio), dont la licence
+  autorise l'usage **non commercial** mais interdit la redistribution : elle a
+  donc été **retirée** du dépôt, et les slimes remplacés par des variantes de
+  couleur des packs d'ennemis. ⚠ Le fichier reste présent dans l'historique Git,
+  et le dépôt a déjà été poussé : le retirer pour de bon demande de réécrire
+  l'historique (`git filter-repo`) et de forcer la mise à jour du distant.
+  `critters.png` n'avait jamais été copiée dans `public/`.
 - Les planches de personnages et le décor de forêt sont arrivés **sans fichier
   de licence**. À vérifier auprès de leur auteur.
 
@@ -199,10 +203,11 @@ dépendance) et calcule, pour chaque créature, la part de vide à gauche et à
 droite de son dessin. Le résultat se recopie dans `HITBOX_INSETS`
 (`src/game/sprites.ts`), d'où l'arène tire le bord avant de chaque combattant.
 
-Il a fallu mesurer parce que les marges n'ont rien de commun : 0 % pour un slime,
-qui touche les deux bords de sa case, 23 % pour une chauve-souris, 35 % à gauche
-pour un squelette dessiné dans 96 px. Un pourcentage unique donnait des mobs qui
-frappaient à distance et d'autres qui se traversaient.
+Il a fallu mesurer parce que les marges n'ont rien de commun : 17 % pour un
+rôdeur qui remplit sa case, 23 % pour une chauve-souris, 31 % pour un champignon,
+et 35 % à gauche contre 29 % à droite pour un squelette dessiné de travers dans
+ses 96 px. Un pourcentage unique donnait des mobs qui frappaient à distance et
+d'autres qui se traversaient.
 
 À relancer si une planche change ou si une créature est ajoutée.
 

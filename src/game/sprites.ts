@@ -5,9 +5,8 @@
  * explicite des cases qu'elle traverse :
  *
  * - les personnages sont des planches 32 × 32, une ligne par animation ;
- * - les slimes et bestioles sont des icônes 96 × 96, dont les poses ne sont pas
- *   contiguës (un slime debout ligne 1, écrasé ligne 3) — d'où les cases une à
- *   une plutôt qu'un simple décalage.
+ * - les ennemis sont des bandes horizontales, un fichier par animation, dont la
+ *   largeur de case diffère d'un pack à l'autre.
  */
 
 export interface SpriteAnim {
@@ -49,42 +48,6 @@ function character(file: string): Record<string, SpriteAnim> {
     hurt: row(sheet, 5, 3, 10, false),
     death: row(sheet, 6, 4, 7, false),
   };
-}
-
-const SLIMES = '/sprites/foes/slimes.png';
-const CRITTERS = '/sprites/foes/critters.png';
-const FOE_CELL: [number, number] = [96, 96];
-
-/**
- * Un slime : deux poses, debout puis écrasé, qui font un rebond une fois
- * enchaînées. `index` va de 0 à 9, dans l'ordre de la planche.
- */
-function slime(index: number): Record<string, SpriteAnim> {
-  const col = 1 + (index % 5);
-  const line = 1 + Math.floor(index / 5);
-  const bounce: SpriteAnim = {
-    sheet: SLIMES,
-    cell: FOE_CELL,
-    cells: [
-      [col, line],
-      [col, line + 2],
-    ],
-    fps: 3,
-    loop: true,
-  };
-  return { idle: bounce, attack: { ...bounce, fps: 9 }, hurt: bounce, death: bounce };
-}
-
-/** Une bestiole : une seule pose, animée par un léger flottement en CSS. */
-function critter(col: number, line: number): Record<string, SpriteAnim> {
-  const still: SpriteAnim = {
-    sheet: CRITTERS,
-    cell: FOE_CELL,
-    cells: [[col, line]],
-    fps: 1,
-    loop: true,
-  };
-  return { idle: still, attack: still, hurt: still, death: still };
 }
 
 /**
@@ -135,40 +98,26 @@ export const SPRITES: Record<string, Record<string, SpriteAnim>> = {
   champignon: beast('mushroom', 80, { idle: 7, walk: 8, attack: 10, hurt: 5, death: 15 }),
   golem: beast('golem', 90, { idle: 8, walk: 10, attack: 11, hurt: 4, death: 13 }),
   squelette: beast('skeleton', 96, { idle: 8, walk: 10, attack: 10, hurt: 5, death: 13 }),
-
-  // Slimes, dans l'ordre de la planche.
-  'slime-vert': slime(0),
-  'slime-ambre': slime(1),
-  'slime-rouge': slime(2),
-  'slime-rouille': slime(3),
-  'slime-rose': slime(4),
-  'slime-violet': slime(5),
-  'slime-bleu': slime(6),
-  'slime-blanc': slime(7),
-  'slime-gris': slime(8),
-  'slime-brun': slime(9),
-
-  // Bestioles : ligne 1 = araignée, coccinelle, abeille, papillon, escargot, ver.
-  araignee: critter(1, 1),
-  coccinelle: critter(2, 1),
-  abeille: critter(3, 1),
-  papillon: critter(4, 1),
-  escargot: critter(5, 1),
-  ver: critter(6, 1),
-  // Ligne 2 = grenouille, rat, chat, hibou, lapin.
-  grenouille: critter(1, 2),
-  rat: critter(2, 2),
-  chat: critter(3, 2),
-  hibou: critter(4, 2),
-  lapin: critter(5, 2),
+  // Variantes de couleur des mêmes packs : de la variété à l'écran sans ajouter
+  // de dépendance à une planche qu'on ne peut pas redistribuer.
+  'golem-ambre': beast('golem-orange', 90, { idle: 8, walk: 10, attack: 11, hurt: 4, death: 13 }),
+  'squelette-pale': beast('skeleton-yellow', 96, {
+    idle: 8,
+    walk: 10,
+    attack: 10,
+    hurt: 5,
+    death: 13,
+  }),
+  // Rôdeur volant : il ne pose pas les pieds au sol et frappe à distance.
+  rodeur: beast('stalker', 64, { idle: 8, walk: 8, attack: 12, hurt: 4, death: 17 }),
 };
 
 /**
  * Part de vide à gauche et à droite du dessin, en fraction de la largeur de la
  * case. **Mesurée dans les images** par `scripts/hitboxes.mjs`, pas estimée : les
- * planches n'ont pas la même marge du tout — une chauve-souris de 64 px est
- * presque pleine, un squelette dessiné dans 96 px flotte au milieu, et un slime
- * touche les deux bords de sa case.
+ * planches n'ont pas la même marge du tout — un rôdeur de 64 px remplit presque
+ * sa case, un squelette dessiné dans 96 px flotte au milieu, et sa marge n'est
+ * même pas symétrique.
  *
  * C'est ce qui donne la boîte de collision de chaque créature. Un pourcentage
  * unique pour tout le monde faisait que certains mobs se frappaient à distance
@@ -183,17 +132,9 @@ export const HITBOX_INSETS: Record<string, [number, number]> = {
   champignon: [0.31, 0.31],
   golem: [0.29, 0.29],
   squelette: [0.35, 0.29],
-  // Les slimes remplissent leur case en largeur : aucune marge à retirer.
-  'slime-vert': [0, 0],
-  'slime-ambre': [0, 0],
-  'slime-rouge': [0, 0],
-  'slime-rouille': [0, 0],
-  'slime-rose': [0, 0],
-  'slime-violet': [0, 0],
-  'slime-bleu': [0, 0],
-  'slime-blanc': [0, 0],
-  'slime-gris': [0, 0],
-  'slime-brun': [0, 0],
+  'golem-ambre': [0.29, 0.29],
+  'squelette-pale': [0.35, 0.29],
+  rodeur: [0.17, 0.19],
 };
 
 /** Repli pour une créature non mesurée : marge modérée, plutôt que rien. */
@@ -215,8 +156,7 @@ export function spriteHeight(id: string): number {
   const cell = SPRITES[id]?.idle.cell;
   if (!cell) return 96;
   if (cell[1] === 32) return 96; // personnages jouables : 32 px × 3
-  if (cell[1] === 64) return 104; // ennemis animés : bandes de 64 px de haut
-  return 64; // icônes 96 px, dont le dessin n'occupe qu'une partie
+  return 104; // ennemis animés : bandes de 64 px de haut
 }
 
 export function animData(id: string, wanted: string[]): SpriteAnim | null {

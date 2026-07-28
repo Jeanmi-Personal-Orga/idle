@@ -10,7 +10,7 @@
  * La mesure lit les pixels : on décode le PNG (zlib, pas de dépendance), on
  * cherche les colonnes réellement opaques de la case animée, et on en déduit la
  * part de vide à gauche et à droite. Le résultat est recopié dans
- * `src/game/sprites.ts` (table HITBOXES).
+ * `src/game/sprites.ts` (table HITBOX_INSETS).
  *
  * Usage : `node scripts/hitboxes.mjs`
  */
@@ -120,28 +120,21 @@ const TARGETS = [
   { id: 'champignon', file: 'public/sprites/foes/mushroom/idle.png', cell: [80, 64], col: 0, line: 0 },
   { id: 'golem', file: 'public/sprites/foes/golem/idle.png', cell: [90, 64], col: 0, line: 0 },
   { id: 'squelette', file: 'public/sprites/foes/skeleton/idle.png', cell: [96, 64], col: 0, line: 0 },
-  ...Array.from({ length: 10 }, (_, i) => ({
-    id: ['vert', 'ambre', 'rouge', 'rouille', 'rose', 'violet', 'bleu', 'blanc', 'gris', 'brun'][i],
-    file: 'public/sprites/foes/slimes.png',
-    cell: [96, 96],
-    col: 1 + (i % 5),
-    line: 1 + Math.floor(i / 5),
-    prefix: 'slime-',
-  })),
-  ...['araignee', 'coccinelle', 'abeille', 'papillon', 'escargot', 'ver'].map((id, i) => ({
-    id,
-    file: 'public/sprites/foes/critters.png',
-    cell: [96, 96],
-    col: 1 + i,
-    line: 1,
-  })),
-  ...['grenouille', 'rat', 'chat', 'hibou', 'lapin'].map((id, i) => ({
-    id,
-    file: 'public/sprites/foes/critters.png',
-    cell: [96, 96],
-    col: 1 + i,
-    line: 2,
-  })),
+  {
+    id: 'golem-ambre',
+    file: 'public/sprites/foes/golem-orange/idle.png',
+    cell: [90, 64],
+    col: 0,
+    line: 0,
+  },
+  {
+    id: 'squelette-pale',
+    file: 'public/sprites/foes/skeleton-yellow/idle.png',
+    cell: [96, 64],
+    col: 0,
+    line: 0,
+  },
+  { id: 'rodeur', file: 'public/sprites/foes/stalker/idle.png', cell: [64, 64], col: 0, line: 0 },
 ];
 
 const cache = new Map();

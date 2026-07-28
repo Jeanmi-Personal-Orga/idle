@@ -5,8 +5,8 @@ import { animData, spriteHeight } from '../game/sprites';
  * Rendu d'un sprite : une case de planche, affichée dans une boîte à l'échelle.
  *
  * L'échelle vient de la taille visée pour la famille (`spriteHeight`) : les
- * personnages sont des cases de 32 px, les slimes et bestioles des icônes de
- * 96 px. Les mettre à la même échelle brute donnerait des rats géants.
+ * personnages sont des cases de 32 px, les ennemis des bandes de 64 px. Les
+ * mettre à la même échelle brute donnerait des chauves-souris géantes.
  */
 
 export function Sprite({

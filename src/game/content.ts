@@ -189,7 +189,7 @@ export const slotDef = (id: SlotId) => SLOTS.find((s) => s.id === id)!;
  *
  * `sprites` associe un sprite à chaque ennemi nommé : les deux archétypes de
  * vague, puis le gardien. Les gardiens sont des humanoïdes — les mêmes planches
- * que les personnages jouables —, la piétaille est faite de slimes et de
+ * que les personnages jouables —, la piétaille est faite de golems et de
  * bestioles. `self` est un cas à part : le reflet du joueur, tel que le demande
  * la direction artistique pour Le Puits Prismatique.
  */
@@ -202,8 +202,8 @@ export const DISTRICTS: {
 }[] = [
   {
     name: 'Les Quais Bas',
-    enemies: ['Rôdeur de vase', 'Noyé pâle', 'Nuée de brume'],
-    sprites: ['champignon', 'slime-vert', 'squelette'],
+    enemies: ['Noyé pâle', 'Guetteur ailé', 'Nuée de brume'],
+    sprites: ['champignon', 'rodeur', 'squelette'],
     blurb: "L'eau noire lèche des pontons pourris où rien ne reste immobile longtemps.",
   },
   {
@@ -215,7 +215,7 @@ export const DISTRICTS: {
   {
     name: 'La Verrerie',
     enemies: ['Souffleur brisé', 'Éclat animé', 'Four hurlant'],
-    sprites: ['squelette', 'slime-blanc', 'golem'],
+    sprites: ['squelette', 'squelette-pale', 'golem'],
     blurb: 'La chaleur des fours a fait fondre plus que le verre.',
   },
   {
@@ -227,7 +227,7 @@ export const DISTRICTS: {
   {
     name: "L'Observatoire",
     enemies: ['Astronome dissous', 'Prisme errant', 'Œil de brume'],
-    sprites: ['chauve-souris', 'slime-violet', 'golem'],
+    sprites: ['chauve-souris', 'golem-ambre', 'golem'],
     blurb: 'Des lentilles brisées regardent encore le ciel, et quelque chose regarde à travers.',
   },
   {

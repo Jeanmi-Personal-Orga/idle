@@ -39,8 +39,8 @@ export const CAMPAIGNS: Campaign[] = [
     blurb: "On y descend pour l'essence, et pour rien d'autre.",
     reward: 'essence',
     depthOffset: -1,
-    sprites: ['champignon', 'slime-vert', 'golem'],
-    enemies: ['Porteur voûté', 'Coulée verte', 'Golem de fond'],
+    sprites: ['champignon', 'rodeur', 'golem'],
+    enemies: ['Porteur voûté', 'Guetteur des galeries', 'Golem de fond'],
   },
   {
     id: 'forge',
@@ -48,8 +48,8 @@ export const CAMPAIGNS: Campaign[] = [
     blurb: "Ce qui reste des ateliers donne de quoi fabriquer.",
     reward: 'reagent',
     depthOffset: 0,
-    sprites: ['squelette', 'slime-gris', 'golem'],
-    enemies: ['Apprenti calciné', 'Scorie vive', 'Maître de forge'],
+    sprites: ['squelette', 'squelette-pale', 'golem-ambre'],
+    enemies: ['Apprenti calciné', 'Os calciné', 'Maître de forge'],
   },
   {
     id: 'archives',
