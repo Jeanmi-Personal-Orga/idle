@@ -42,9 +42,10 @@ const CONTACT_GAP = 6;
  * Les sprites sont dessinés dans une case bien plus large que la créature :
  * on rétrécit donc chaque côté de cette fraction pour obtenir une boîte de
  * collision qui colle au corps. Sans ça, deux personnages « se toucheraient »
- * alors qu'un bon tiers de vide les sépare encore.
+ * alors qu'un large vide les sépare encore : plus la valeur est grande, plus il
+ * faut se rapprocher pour frapper.
  */
-const HITBOX_INSET = 0.3;
+const HITBOX_INSET = 0.38;
 
 
 export function Arena({
@@ -305,10 +306,18 @@ export function Arena({
           key={index}
           enemy={enemy}
           index={index}
+          wave={`${c.district}-${c.wave}`}
           engaged={engaged.has(index)}
-          // Au contact on se serre contre le premier ; en attente on reste loin
-          // derrière, pour qu'on voie qui se bat et qui attend son tour.
-          offset={engaged.has(index) ? 22 : 40 + i * 24}
+          // Tout le monde entre par la droite. Celui qui a une place au contact
+          // marche presque aussi loin que le premier et vient se coller à lui —
+          // leurs boîtes de collision touchent donc le héros toutes les deux.
+          // Celui qui attend son tour ne bouge pas : il reste au bord droit.
+          travel={engaged.has(index) ? Math.max(0, foeTravel - 24) : 0}
+          // Léger décalage pour ceux qui attendent : juste de quoi ne pas se
+          // superposer, sans quitter le bord droit.
+          offset={engaged.has(index) ? 0 : -i * 14}
+          walkMs={walkMs}
+          walking={foeWalking}
           hidden={between}
         />
       ))}
@@ -339,22 +348,36 @@ function foeAnim(walking: boolean, striking: boolean, hit: boolean): string {
 }
 
 /**
- * Ennemi en surnombre, sur une vague de contrat : pas de marche ni de mise en
- * scène complète, juste une icône qui encaisse et flashe à son tour — le
- * strict nécessaire pour rester lisible sans reconstruire toute la scène.
+ * Ennemi en surnombre. Il entre par la droite comme les autres, puis :
+ *
+ * - s'il a une place au contact, il marche jusqu'au héros et frappe avec le
+ *   premier — sa boîte de collision touche celle du héros elle aussi ;
+ * - sinon il patiente au bord droit, un peu effacé, et n'infliger rien tant
+ *   qu'une place ne se libère pas.
  */
 function ExtraFoe({
   scope,
   enemy,
   index,
   offset,
+  travel,
+  walkMs,
+  walking,
+  wave,
   engaged,
   hidden,
 }: {
   scope: FightScope;
   enemy: { hp: number; maxHp: number; sprite: string; name: string };
   index: number;
+  /** Écart de départ, au bord droit, pour ne pas se superposer aux autres. */
   offset: number;
+  /** Distance à couvrir vers la gauche ; zéro s'il attend son tour. */
+  travel: number;
+  walkMs: number;
+  walking: boolean;
+  /** Change à chaque vague : relance l'animation d'entrée. */
+  wave: string;
   /** Au contact : il frappe avec les autres. Sinon il attend, et ne fait rien. */
   engaged: boolean;
   hidden: boolean;
@@ -368,18 +391,26 @@ function ExtraFoe({
   return (
     <div
       className={`fighter-slot foe extra ${engaged ? '' : 'waiting'} ${hidden ? 'gone' : ''}`}
-      // Le décalage est animé : quand le rang de devant tombe, ceux de derrière
-      // avancent d'un cran au lieu de sauter.
-      style={{ transform: `translateX(-${offset}px)` }}
+      style={{ transform: `translateX(${offset}px)` }}
+    >
+    <div
+      key={`${wave}-${engaged}`}
+      className={`mover ${travel > 0 ? 'approaching' : ''}`}
+      style={{
+        ['--to' as string]: `${-travel}px`,
+        animationDuration: `${walkMs}ms`,
+        transform: travel > 0 ? undefined : 'translateX(0)',
+      }}
     >
       <Sprite
         character={enemy.sprite === 'self' ? DEFAULT_CHARACTER : enemy.sprite}
-        anim={hit ? 'hurt' : striking ? 'attack' : 'idle'}
+        anim={hit ? 'hurt' : striking ? 'attack' : walking && travel > 0 ? 'walk' : 'idle'}
         fallbackAnim={['idle']}
         flip
         className={hit ? 'flash' : ''}
       />
       {hit && <span className="impact" aria-hidden="true" />}
+    </div>
     </div>
   );
 }

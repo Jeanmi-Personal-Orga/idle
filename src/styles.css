@@ -384,8 +384,9 @@ main {
   left: 6%;
 }
 
+/* Les ennemis entrent en scène tout à droite : c'est de là qu'ils avancent. */
 .fighter-slot.foe {
-  right: 6%;
+  right: 3%;
 }
 
 /* Ennemis en surnombre (vague de contrat) : en retrait, sans mise en scène. */
