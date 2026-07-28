@@ -5,7 +5,7 @@ import {
   missionRewards,
   type DailyMission,
 } from '../game/campaigns';
-import { allMissionsWon, formatNum, loseMission, startMission } from '../game/engine';
+import { allMissionsWon, formatNum, keysLeft, loseMission, startMission } from '../game/engine';
 import { heroStats, powerScore, recommendedPower } from '../game/formulas';
 import { districtLabel } from '../game/content';
 import { useState } from 'react';
@@ -32,7 +32,10 @@ export function CampaignView() {
   const [showContract, setShowContract] = useState(false);
   const active = state.mission;
   const power = powerScore(heroStats(state));
-  const keys = state.keys?.left ?? 0;
+  // Les deux réserves comptent pareil pour partir en mission ; on les détaille
+  // seulement pour que le joueur voie ce qui vient de son achat.
+  const keys = keysLeft(state);
+  const bought = state.keys?.bought ?? 0;
   const missions = state.daily?.missions ?? [];
   const won = missions.filter((m) => m.status === 'won').length;
   const bonus = dailyBonus(missions);
@@ -44,10 +47,10 @@ export function CampaignView() {
           <div className="label">Missions du jour</div>
           <div className="right">
             <b>
-              🔑 {keys}
-              {keys <= KEYS_PER_DAY && ` / ${KEYS_PER_DAY}`}
+              🔑 {state.keys?.left ?? 0} / {KEYS_PER_DAY}
+              {bought > 0 && ` + ${bought}`}
             </b>
-            <div className="muted small">clés</div>
+            <div className="muted small">{bought > 0 ? 'du jour + achetées' : 'clés du jour'}</div>
           </div>
         </div>
         <div className="muted small">

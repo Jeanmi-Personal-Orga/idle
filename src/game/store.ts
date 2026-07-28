@@ -325,7 +325,7 @@ export function migrate(save: GameState): GameState | null {
   }
   if (save.version === 13) {
     // v14 : clés de campagne, trois par jour.
-    save.keys = { left: KEYS_PER_DAY, day: today() };
+    save.keys = { left: KEYS_PER_DAY, day: today(), bought: 0 };
     save.mission = null;
     save.version = 14;
   }
@@ -341,6 +341,11 @@ export function migrate(save: GameState): GameState | null {
     save.daily = { day: '', missions: [], bonusPaid: false };
     save.mission = null;
     save.version = 16;
+  }
+  if (save.version === 16) {
+    // v17 : les clés achetées ont leur propre réserve, qui ne se périme pas.
+    save.keys.bought = save.keys.bought ?? 0;
+    save.version = 17;
   }
   return save.version === SAVE_VERSION ? save : null;
 }

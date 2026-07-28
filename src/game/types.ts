@@ -196,10 +196,15 @@ export interface GameState {
    */
   pendingContract: { essence: number; reagent: number; insight: number } | null;
   /**
-   * Clés de campagne : trois par jour, remises à neuf au changement de date
-   * locale. Elles bornent le farm des campagnes sans imposer de minuterie.
+   * Clés de mission, en **deux réserves distinctes** :
+   *
+   * - `left` : la dotation du jour, remise à trois au changement de date ;
+   * - `bought` : celles achetées au comptoir, qui ne se périment **jamais** —
+   *   sans cette séparation, une clé payée disparaissait au premier minuit.
+   *
+   * On dépense la dotation d'abord, les clés achetées ensuite.
    */
-  keys: { left: number; day: string };
+  keys: { left: number; day: string; bought: number };
   /** Mission en cours, ou `null`. Voir `MissionRun`. */
   mission: MissionRun | null;
   /** Tableau des missions du jour ; retiré au sort à chaque changement de date. */

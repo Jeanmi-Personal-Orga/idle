@@ -112,45 +112,6 @@ export const SPRITES: Record<string, Record<string, SpriteAnim>> = {
   rodeur: beast('stalker', 64, { idle: 8, walk: 8, attack: 12, hurt: 4, death: 17 }),
 };
 
-/**
- * Part de vide à gauche et à droite du dessin, en fraction de la largeur de la
- * case. **Mesurée dans les images** par `scripts/hitboxes.mjs`, pas estimée : les
- * planches n'ont pas la même marge du tout — un rôdeur de 64 px remplit presque
- * sa case, un squelette dessiné dans 96 px flotte au milieu, et sa marge n'est
- * même pas symétrique.
- *
- * C'est ce qui donne la boîte de collision de chaque créature. Un pourcentage
- * unique pour tout le monde faisait que certains mobs se frappaient à distance
- * et que d'autres se traversaient.
- */
-export const HITBOX_INSETS: Record<string, [number, number]> = {
-  fighter: [0.28, 0.25],
-  barbarian: [0.28, 0.28],
-  'knight-a': [0.28, 0.28],
-  'knight-b': [0.28, 0.28],
-  'chauve-souris': [0.23, 0.23],
-  champignon: [0.31, 0.31],
-  golem: [0.29, 0.29],
-  squelette: [0.35, 0.29],
-  'golem-ambre': [0.29, 0.29],
-  'squelette-pale': [0.35, 0.29],
-  rodeur: [0.17, 0.19],
-};
-
-/** Repli pour une créature non mesurée : marge modérée, plutôt que rien. */
-const DEFAULT_INSETS: [number, number] = [0.25, 0.25];
-
-/**
- * Bord avant du dessin, en fraction de la largeur de la case, du point de vue de
- * qui avance. Le héros regarde à droite : son avant est son bord droit. Les
- * ennemis sont retournés à l'affichage, donc leur bord gauche visible est le bord
- * **droit** de l'image d'origine — d'où la même valeur dans les deux cas.
- */
-export function spriteFront(id: string, flipped: boolean): number {
-  const inset = (HITBOX_INSETS[id] ?? DEFAULT_INSETS)[1];
-  return flipped ? inset : 1 - inset;
-}
-
 /** Hauteur d'affichage visée par famille, pour que les gabarits restent justes. */
 export function spriteHeight(id: string): number {
   const cell = SPRITES[id]?.idle.cell;

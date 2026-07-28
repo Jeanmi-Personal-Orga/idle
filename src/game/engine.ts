@@ -36,7 +36,7 @@ import { spriteStyle } from './characters';
 import type { CharacterId } from './characters';
 import type { Enemy, GameState, Item, MissionRun, SlotId } from './types';
 
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 17;
 
 /**
  * Temps mort entre deux vagues, en secondes. Il sert à raconter : le héros
@@ -188,10 +188,20 @@ export function today(): string {
  */
 export function refreshKeys(state: GameState) {
   const day = today();
-  if (!state.keys || state.keys.day !== day) {
-    state.keys = { left: KEYS_PER_DAY, day };
+  if (!state.keys) {
+    state.keys = { left: KEYS_PER_DAY, day, bought: 0 };
+    return;
+  }
+  if (state.keys.day !== day) {
+    // Seule la dotation du jour repart à neuf : les clés achetées survivent au
+    // changement de date, sinon on ferait disparaître un achat à minuit.
+    state.keys = { left: KEYS_PER_DAY, day, bought: state.keys.bought ?? 0 };
   }
 }
+
+/** Clés disponibles, les deux réserves confondues. */
+export const keysLeft = (state: GameState) =>
+  (state.keys?.left ?? 0) + (state.keys?.bought ?? 0);
 
 /**
  * Retire les missions du jour si la date de Paris a changé. Le tirage est
@@ -219,7 +229,7 @@ export function refreshDaily(state: GameState) {
  */
 export function grantKeys(state: GameState, keys: number) {
   refreshKeys(state);
-  state.keys.left += keys;
+  state.keys.bought = (state.keys.bought ?? 0) + keys;
   pushLog(state, `Comptoir : +${keys} clé${keys > 1 ? 's' : ''} de mission.`);
 }
 
@@ -245,8 +255,10 @@ export function startMission(state: GameState, missionId: string): boolean {
   // victoire la consomme, donc trois clés valent trois missions remportées, mais
   // rater n'a jamais fermé la journée.
   refreshKeys(state);
-  if (state.keys.left < 1) return false;
-  state.keys.left -= 1;
+  if (keysLeft(state) < 1) return false;
+  // La dotation du jour part la première : les clés payées restent en réserve.
+  if (state.keys.left > 0) state.keys.left -= 1;
+  else state.keys.bought -= 1;
   const run: MissionRun = {
     id: campaign.id,
     missionId: mission.id,
@@ -275,10 +287,11 @@ export function loseMission(state: GameState, reason: string) {
   if (run) {
     const mission = state.daily.missions.find((m) => m.id === run.missionId);
     if (mission && mission.status !== 'won') mission.status = 'lost';
-    // La clé revient : on ne perd une clé qu'en remportant une mission. Pas de
-    // plafond ici — on ne rend que ce qui a été dépensé, et un joueur peut
-    // détenir plus de clés que la dotation du jour s'il en a acheté.
-    state.keys.left += 1;
+    // La clé revient : on ne perd une clé qu'en remportant une mission. Elle
+    // retourne dans la dotation du jour tant que celle-ci n'est pas pleine, dans
+    // la réserve achetée ensuite — donc jamais de clé perdue ni créée.
+    if (state.keys.left < KEYS_PER_DAY) state.keys.left += 1;
+    else state.keys.bought = (state.keys.bought ?? 0) + 1;
   }
   pushLog(state, reason);
 }
@@ -296,7 +309,7 @@ export function newGame(): GameState {
     tech: {},
     ascension: { count: 0, legacies: {}, deepest: 0 },
     pendingContract: null,
-    keys: { left: KEYS_PER_DAY, day: today() },
+    keys: { left: KEYS_PER_DAY, day: today(), bought: 0 },
     mission: null,
     daily: {
       day: today(),
@@ -399,7 +412,10 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
     c.hero.hp = Math.min(s.health, c.hero.hp + s.health * 0.4 * dt);
     if (c.reviving <= 0) {
       c.hero.hp = s.health;
-      c.wave = 1;
+      // Une chute coûte **une vague**, pas le chapitre entier : mourir vague 12
+      // renvoie vague 11. Repartir de la première rendait toute progression
+      // profonde décourageante.
+      c.wave = Math.max(1, c.wave - 1);
       c.enemies = makeEnemies(c.district, c.wave, allMods(state).enemyDamageMult);
       c.closing = closingTime(state);
     }
@@ -501,7 +517,7 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
       if (c.hero.hp <= 0) {
         c.hero.hp = 0;
         c.reviving = 3;
-        pushLog(state, `Dissous par ${enemy.name}. Retour à l'entrée du district.`);
+        pushLog(state, `Dissous par ${enemy.name}. Tu recules d'une vague.`);
         return;
       }
     }

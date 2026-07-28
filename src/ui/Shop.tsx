@@ -1,4 +1,4 @@
-import { formatNum, grantKeys, pushLog } from '../game/engine';
+import { formatNum, grantKeys, keysLeft, pushLog } from '../game/engine';
 import { GOLD_PACKS, KEY_PACKS } from '../game/shop';
 import { store, useGame } from '../game/store';
 import { ResIcon } from './ResIcon';
@@ -63,13 +63,14 @@ export function ShopView() {
         <div className="row between">
           <div className="label">Clés de mission</div>
           <div className="muted small">
-            🔑 {state.keys?.left ?? 0} en poche
+            🔑 {keysLeft(state)} en poche
           </div>
         </div>
         <div className="muted small">
           Une clé ouvre une tentative de mission — et une mission déjà remportée se
           rejoue pour sa récompense. On n'achète pas les ressources : on achète le
-          droit d'aller les chercher.
+          droit d'aller les chercher. Les clés achetées ne se périment pas : la
+          remise à zéro de minuit ne touche que les trois clés du jour.
         </div>
         {KEY_PACKS.map((pack) => (
           <div className="row between" key={pack.id}>

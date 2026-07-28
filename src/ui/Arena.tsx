@@ -3,7 +3,7 @@ import { DEFAULT_CHARACTER, spriteStyle } from '../game/characters';
 import {
   districtLabel, WAVES_PER_DISTRICT, cycleOf } from '../game/content';
 import { CONTACT_SLOTS, WAVE_PAUSE, closingTime, engagedEnemies, formatNum } from '../game/engine';
-import { BACKGROUND_LAYERS, spriteFront } from '../game/sprites';
+import { BACKGROUND_LAYERS } from '../game/sprites';
 import { store, useGame } from '../game/store';
 import type { Enemy, Hero } from '../game/types';
 import type { FightScope } from '../game/engine';
@@ -36,18 +36,15 @@ import { Sprite } from './Sprite';
  */
 
 /**
- * Portée : de combien les deux boîtes de collision peuvent rester écartées tout
- * en se touchant « assez » pour frapper. C'est aussi là que la marche s'arrête —
- * les deux valeurs viennent du même calcul, donc on ne se dépasse plus.
+ * Écart laissé entre les deux rectangles quand on est au contact : quelques
+ * pixels, pour qu'ils se touchent presque sans se chevaucher.
+ *
+ * La boîte de collision est **le rectangle du sprite**, ni plus ni moins. C'est
+ * la même règle pour tout le monde, donc prévisible ; en échange, l'écart visible
+ * entre les corps dépend de la marge transparente de chaque planche.
  */
-const CONTACT_REACH = 8;
+const CONTACT_GAP = 4;
 
-/*
- * Le resserrement n'est plus une constante : chaque créature a le sien, mesuré
- * dans son image (`HITBOX_INSETS` dans sprites.ts, via `scripts/hitboxes.mjs`).
- * Une valeur unique ne pouvait pas convenir — les marges vont de 17 % pour un
- * rôdeur à 35 % pour un squelette, et ne sont même pas symétriques.
- */
 
 /** Écart entre deux rangs de la file : assez serré pour que la vague reste groupée. */
 const FILE_SPACING = 30;
@@ -135,16 +132,7 @@ export function Arena({
   // Boîtes de collision réelles, mesurées à l'écran.
   const heroBoxRef = useRef<HTMLDivElement>(null);
   const foeBoxRef = useRef<HTMLDivElement>(null);
-  // Bord avant de chacun, en fraction de sa case : c'est ce qui rend la mesure
-  // juste pour toutes les créatures, quelle que soit la marge de leur planche.
-  const heroFront = spriteFront(hero, false);
-  const foeFront = spriteFront(foe, true);
-  const gap = useGap(arenaRef, heroRef, foeRef, heroFront, foeFront, [
-    c.district,
-    c.wave,
-    hero,
-    foe,
-  ]);
+  const gap = useGap(arenaRef, heroRef, foeRef, [c.district, c.wave, hero, foe]);
 
   // Même vitesse de déplacement pour tout le monde. Une arme de mêlée envoie le
   // héros à sa marque, à mi-distance, et il y reste : les vagues suivantes
@@ -189,8 +177,6 @@ export function Arena({
   // moteur comme à l'écran. Il tombe à faux dès qu'une nouvelle vague se lève,
   // et repasse à vrai à l'instant où les deux boîtes se touchent.
   const touching = useContact(heroBoxRef, foeBoxRef, scope, {
-    heroFront,
-    foeFront,
     active: !between && !dead && Boolean(front),
     // Filet de sécurité : la marche accordée par le moteur est écoulée. Si les
     // boîtes ne se rejoignent pas — mesure impossible, mise en page inattendue —
@@ -442,20 +428,12 @@ function usePulse(counter: number, ms: number): boolean {
   return on;
 }
 
-/** Abscisse du bord avant d'un sprite à l'écran, marge de sa planche déduite. */
-function frontEdge(el: HTMLElement, front: number): number {
-  const r = el.getBoundingClientRect();
-  return r.left + r.width * front;
-}
-
-/** Vrai quand les deux corps sont à portée l'un de l'autre. */
-function withinReach(
-  hero: HTMLElement,
-  foe: HTMLElement,
-  heroFront: number,
-  foeFront: number,
-): boolean {
-  return frontEdge(hero, heroFront) + CONTACT_REACH >= frontEdge(foe, foeFront);
+/**
+ * Vrai quand les deux rectangles sont côte à côte, à `CONTACT_GAP` près : le
+ * bord droit du héros a rejoint le bord gauche de l'ennemi.
+ */
+function withinReach(hero: HTMLElement, foe: HTMLElement): boolean {
+  return hero.getBoundingClientRect().right + CONTACT_GAP >= foe.getBoundingClientRect().left;
 }
 
 /**
@@ -471,18 +449,13 @@ function useContact(
   a: React.RefObject<HTMLElement | null>,
   b: React.RefObject<HTMLElement | null>,
   scope: FightScope,
-  {
-    active,
-    walkDone,
-    heroFront,
-    foeFront,
-  }: { active: boolean; walkDone: boolean; heroFront: number; foeFront: number },
+  { active, walkDone }: { active: boolean; walkDone: boolean },
 ): boolean {
   const [touching, setTouching] = useState(false);
   // Ces deux valeurs changent à chaque tick : on les lit dans la boucle par
   // référence, sinon elle se relancerait dix fois par seconde.
-  const flags = useRef({ active, walkDone, heroFront, foeFront });
-  flags.current = { active, walkDone, heroFront, foeFront };
+  const flags = useRef({ active, walkDone });
+  flags.current = { active, walkDone };
 
   useEffect(() => {
     let raf = 0;
@@ -494,10 +467,7 @@ function useContact(
       let value: boolean;
       if (!flags.current.active) value = false;
       else if (!ea || !eb) value = true;
-      else {
-        const { heroFront: hf, foeFront: ff } = flags.current;
-        value = withinReach(ea, eb, hf, ff) || flags.current.walkDone;
-      }
+      else value = withinReach(ea, eb) || flags.current.walkDone;
       if (value === last) return;
       last = value;
       store.setContact(scope, value);
@@ -535,10 +505,10 @@ function useFalling(flag: boolean, ms: number): boolean {
 }
 
 /**
- * Distance qu'il reste à couvrir pour amener les deux **boîtes de collision** à
- * portée — pas les cases des sprites, qui débordent largement des corps. C'est le
- * même calcul que `withinReach`, appliqué aux positions de repos : la marche
- * s'arrête donc exactement là où les coups deviennent possibles, sans dépasser.
+ * Distance qu'il reste à couvrir pour amener les deux rectangles côte à côte.
+ * C'est le même calcul que `withinReach`, appliqué aux positions de repos : la
+ * marche s'arrête donc exactement là où les coups deviennent possibles, sans
+ * jamais dépasser.
  *
  * On mesure en coordonnées de mise en page (`offsetLeft` / `offsetWidth`), pas en
  * rectangles à l'écran : ceux-là portent déjà les déplacements en cours.
@@ -547,8 +517,6 @@ function useGap(
   arena: React.RefObject<HTMLDivElement | null>,
   a: React.RefObject<HTMLDivElement | null>,
   b: React.RefObject<HTMLDivElement | null>,
-  heroFront: number,
-  foeFront: number,
   deps: unknown[],
 ): number {
   const [gap, setGap] = useState(0);
@@ -558,11 +526,9 @@ function useGap(
       const ea = a.current;
       const eb = b.current;
       if (!ea || !eb) return;
-      // Bord avant de chacun, marge de sa planche déduite : le héros pousse vers
-      // la droite, l'ennemi vers la gauche.
-      const heroAt = ea.offsetLeft + ea.offsetWidth * heroFront;
-      const foeAt = eb.offsetLeft + eb.offsetWidth * foeFront;
-      setGap(Math.max(0, foeAt - heroAt - CONTACT_REACH));
+      // Rectangles bruts : bord droit du héros contre bord gauche de l'ennemi.
+      const heroRight = ea.offsetLeft + ea.offsetWidth;
+      setGap(Math.max(0, eb.offsetLeft - heroRight - CONTACT_GAP));
     };
     measure();
     const el = arena.current;

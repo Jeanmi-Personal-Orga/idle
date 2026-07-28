@@ -176,13 +176,15 @@ Les planches viennent de packs tiers déposés par le joueur dans `assets/`, non
 versionné. Ce qui est versionné, c'est le sous-ensemble servi par le jeu, dans
 `public/sprites/`. Deux points à trancher avant toute diffusion :
 
-- `slimes.png` venait de **Cauldron's Brew** (Plopstudio), dont la licence
-  autorise l'usage **non commercial** mais interdit la redistribution : elle a
-  donc été **retirée** du dépôt, et les slimes remplacés par des variantes de
-  couleur des packs d'ennemis. ⚠ Le fichier reste présent dans l'historique Git,
-  et le dépôt a déjà été poussé : le retirer pour de bon demande de réécrire
-  l'historique (`git filter-repo`) et de forcer la mise à jour du distant.
-  `critters.png` n'avait jamais été copiée dans `public/`.
+- Les planches de **Cauldron's Brew** (Plopstudio) autorisent l'usage
+  **non commercial** mais interdisent la redistribution. Elles ont été retirées du
+  dépôt **et de l'historique** : `slimes.png`, `critters.png`, le dossier `hd/`
+  (dont `Critters.png`, `Equiptment.png`, `Gems.png`, `Eyes.png`,
+  `Cauldron and Powder.png`) et le pack généré `sprites-hd-alchimiste-de-brume/`,
+  dont les icônes en étaient dérivées. L'historique a été réécrit
+  (`git filter-branch`) et le distant mis à jour de force : **tout clone antérieur
+  au 28 juillet 2026 doit être refait**. Les slimes sont remplacés par des
+  variantes de couleur des packs d'ennemis.
 - Les planches de personnages et le décor de forêt sont arrivés **sans fichier
   de licence**. À vérifier auprès de leur auteur.
 
@@ -195,21 +197,6 @@ npm run build    # typecheck + bundle dans dist/
 npm run lint
 npm run smoke    # monte l'app dans un DOM sans navigateur et visite les 5 onglets
 ```
-
-### Boîtes de collision mesurées dans les images
-
-`node scripts/hitboxes.mjs` décode les planches de sprites (zlib, sans
-dépendance) et calcule, pour chaque créature, la part de vide à gauche et à
-droite de son dessin. Le résultat se recopie dans `HITBOX_INSETS`
-(`src/game/sprites.ts`), d'où l'arène tire le bord avant de chaque combattant.
-
-Il a fallu mesurer parce que les marges n'ont rien de commun : 17 % pour un
-rôdeur qui remplit sa case, 23 % pour une chauve-souris, 31 % pour un champignon,
-et 35 % à gauche contre 29 % à droite pour un squelette dessiné de travers dans
-ses 96 px. Un pourcentage unique donnait des mobs qui frappaient à distance et
-d'autres qui se traversaient.
-
-À relancer si une planche change ou si une créature est ajoutée.
 
 ### Le test de fumée, et pourquoi il existe
 
