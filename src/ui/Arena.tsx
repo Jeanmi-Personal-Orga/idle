@@ -73,9 +73,16 @@ export function Arena({
     // tirage du jour, un chapitre en a toujours dix.
     waves: fight?.waves ?? WAVES_PER_DISTRICT,
     interlude: fight ? (fight.interlude ?? 0) : (chapter.interlude ?? 0),
+    // Une mission n'a pas de relève : une chute y met fin.
+    interludeFrom: fight ? 'wave' : (chapter.interludeFrom ?? 'wave'),
   };
   /** Entre deux vagues : le héros marche vers la sortie, personne ne se bat. */
   const between = c.interlude > 0;
+  /**
+   * Temps mort qui suit une chute : même écran noir, même entrée de l'ennemi par
+   * la droite, mais le héros ne sort pas — il se relève sur place.
+   */
+  const afterDeath = between && c.interludeFrom === 'death';
 
   const hero = state.character ?? DEFAULT_CHARACTER;
   // Un mort quitte la scène : la cible affichée est le **premier ennemi encore
@@ -141,16 +148,24 @@ export function Arena({
   // Comme l'ennemi, il part **toujours de sa marque** et s'anime vers sa cible :
   // une transition l'aurait fait reculer en glissant à la fin du temps mort, au
   // lieu de réapparaître à gauche sur la nouvelle scène.
-  const heroAt = dead ? 0 : between ? exitTravel : heroTravel;
-  // Le noir couvre la coupure : il tombe pendant que le héros finit sa sortie,
-  // et se lève sur la scène remise à zéro. C'est lui qui autorise le
-  // repositionnement instantané des deux camps.
-  const resuming = useFalling(between, 500);
+  // Mort, il tombe **là où il se tenait** : rien ne le replace tant que l'écran
+  // n'est pas noir. Le retour à sa marque se fait ensuite, sous le noir.
+  const heroAt = afterDeath ? 0 : dead ? heroTravel : between ? exitTravel : heroTravel;
+  // Le rideau noir couvre toutes les coupures : il tombe pendant que le héros
+  // finit sa sortie, ou d'un coup quand il tombe, et se lève sur la scène remise
+  // en ordre. C'est lui qui autorise le repositionnement instantané des camps.
+  //
+  // Entre deux vagues il attend que la marche de sortie soit bien entamée ; à la
+  // mort il tombe tout de suite, pour qu'on ne voie pas l'ennemi rester planté là.
+  // Le hook est appelé sans condition : un `||` court-circuité l'aurait sauté
+  // certains rendus, ce que React interdit.
+  const waveCurtain = useDelayed(between && !afterDeath, 1100);
+  const curtain = dead || afterDeath || waveCurtain;
   // Plus de détection de collision à l'écran : la marche s'achève **exactement**
   // au contact, puisque sa distance est calculée pour cela. Le décompte du moteur
   // (`closing`) et l'animation partagent la même durée, donc l'instant où les
   // coups partent est aussi celui de l'arrivée.
-  const heroWalking = (walking && heroTravel > 0) || between;
+  const heroWalking = (walking && heroTravel > 0) || (between && !afterDeath);
   const foeWalking = walking && foeTravel > 0;
 
   // Les à-coups de combat vivent sur leur propre couche : ils ne touchent plus à
@@ -175,15 +190,9 @@ export function Arena({
         />
       ))}
 
-      {/* Le fondu au noir de l'entre-deux-vagues : il descend quand le héros
-          atteint la sortie, et se lève sur la vague suivante déjà en place. */}
-      {(between || resuming) && (
-        <div
-          className={`blackout ${between ? 'falling' : 'rising'}`}
-          aria-hidden="true"
-          style={between ? { animationDuration: `${walkMs}ms` } : undefined}
-        />
-      )}
+      {/* Toujours monté : c'est son opacité qui monte et descend, donc le fondu se
+          joue dans les deux sens sans dépendre du montage. */}
+      <div className={`blackout ${curtain ? 'on' : ''}`} aria-hidden="true" />
 
       {/* Chapitre et vague s'affichent sur la scène, pas dans une barre au-dessus :
           c'est là que le joueur regarde. L'annonce se lit en grand pendant le
@@ -428,20 +437,19 @@ function usePulse(counter: number, ms: number): boolean {
 }
 
 /**
- * Vrai pendant `ms` après que `flag` soit repassé à faux. Sert au fondu qui se
- * lève : le temps mort est fini côté moteur, mais l'écran doit encore
- * s'éclaircir.
+ * Vrai `ms` après que `flag` soit passé à vrai, et faux dès qu'il retombe. Sert
+ * au rideau noir : il ne doit descendre qu'une fois la sortie de scène entamée,
+ * mais se lever sans délai.
  */
-function useFalling(flag: boolean, ms: number): boolean {
+function useDelayed(flag: boolean, ms: number): boolean {
   const [on, setOn] = useState(false);
-  const previous = useRef(flag);
 
   useEffect(() => {
-    const fell = previous.current && !flag;
-    previous.current = flag;
-    if (!fell) return;
-    setOn(true);
-    const t = window.setTimeout(() => setOn(false), ms);
+    if (!flag) {
+      setOn(false);
+      return;
+    }
+    const t = window.setTimeout(() => setOn(true), ms);
     return () => window.clearTimeout(t);
   }, [flag, ms]);
 

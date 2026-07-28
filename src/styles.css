@@ -1657,45 +1657,25 @@ nav .icon {
 }
 
 /*
- * Coupure entre deux vagues : le noir tombe pendant que le héros finit sa sortie
- * à droite, couvre le repositionnement des deux camps, puis se lève sur la vague
- * suivante — héros à gauche, ennemis à droite. Sans lui, on verrait le héros
- * revenir en arrière.
+ * Rideau noir des coupures : entre deux vagues, et à la mort du héros. Il couvre
+ * le repositionnement des deux camps — sans lui, on verrait le héros revenir à sa
+ * marque et l'ennemi réapparaître d'un coup.
+ *
+ * Une transition d'opacité, pas une animation : elle se joue dans les deux sens et
+ * ne dépend pas du montage de l'élément.
  */
 .blackout {
   position: absolute;
   inset: 0;
   z-index: 3;
   background: #05070a;
+  opacity: 0;
   pointer-events: none;
+  transition: opacity 450ms ease;
 }
 
-.blackout.falling {
-  animation: blackout-fall linear forwards;
-}
-
-.blackout.rising {
-  animation: blackout-rise 500ms ease-out forwards;
-}
-
-@keyframes blackout-fall {
-  0%,
-  55% {
-    opacity: 0;
-  }
-  85%,
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes blackout-rise {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
+.blackout.on {
+  opacity: 1;
 }
 
 /* L'annonce de la vague se lit par-dessus le noir : c'est tout l'intérêt. */

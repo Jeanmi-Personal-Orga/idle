@@ -131,6 +131,13 @@ export interface CombatState {
    * temps le héros marche vers la sortie et la vague suivante s'annonce.
    */
   interlude: number;
+  /**
+   * D'où vient le temps mort en cours : une vague nettoyée — le héros sort par la
+   * droite — ou une chute, où il reste sur place le temps qu'on remette la scène
+   * en ordre. Dans les deux cas l'écran passe au noir et l'ennemi rentre par la
+   * droite.
+   */
+  interludeFrom?: 'wave' | 'death';
 }
 
 /**

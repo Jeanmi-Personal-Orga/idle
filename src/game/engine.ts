@@ -417,8 +417,14 @@ function advanceCombat(state: GameState, dt: number, rng: () => number, sink: Ev
       // renvoie vague 11. Repartir de la première rendait toute progression
       // profonde décourageante.
       c.wave = Math.max(1, c.wave - 1);
-      c.enemies = makeEnemies(c.district, c.wave, allMods(state).enemyDamageMult);
-      c.closing = closingTime(state);
+      // Même remise en scène qu'entre deux vagues : écran noir, puis l'ennemi
+      // rentre par la droite. Sans ce temps mort, il réapparaissait au contact,
+      // sur place, et on ne comprenait pas qu'on venait de reculer.
+      c.enemies = [];
+      c.interlude = WAVE_PAUSE;
+      c.interludeFrom = 'death';
+      c.hero.cooldown = 0;
+      c.closing = 0;
     }
     return;
   }
@@ -561,6 +567,7 @@ function onWaveCleared(state: GameState, rng: () => number) {
   // On n'invoque pas la vague suivante tout de suite : le temps mort laisse le
   // héros rejoindre le bout de l'arène et la vague s'annoncer.
   c.interlude = WAVE_PAUSE;
+  c.interludeFrom = 'wave';
   c.enemies = [];
   c.hero.cooldown = 0;
 }
