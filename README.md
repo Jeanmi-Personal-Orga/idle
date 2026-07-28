@@ -217,16 +217,16 @@ npm run prebuild   # génère les projets natifs android/ et ios/
 ### Vérifications, et ce qu'elles couvrent
 
 ```bash
-npm run check      # tout : types, lint, moteur, géométrie, rendu
+npm run check      # tout : types, lint, cycles, moteur, géométrie, rendu
 npm run typecheck  # tsc
 npm run lint       # oxlint
+npm run cycles     # cycles d'imports dans src/
 npm run engine     # règles de jeu simulées dans Node (progression, clés, combat)
 npm run geometry   # arithmétique de placement de l'arène
 npm test           # monte l'application entière hors appareil et visite les onglets
 ```
 
-Trois de ces quatre vérifications existent parce qu'un build vert ne dit rien du
-comportement :
+Ces vérifications existent parce qu'un build vert ne dit rien du comportement :
 
 - **`npm run engine`** fait tourner le moteur dans Node — il est pur, sans DOM ni
   React ni natif. C'est là qu'on vérifie la progression, l'économie des clés et les
@@ -237,6 +237,12 @@ comportement :
 - **`npm test`** monte l'application avec le rendu de test de React Native. Le
   typechecker accepte `<div>` sans broncher ; React Native, non — ce test attrape
   donc tout reste de web, comme il attrapait les écrans noirs de l'ancienne version.
+- **`npm run cycles`** cherche les cycles d'imports. Metro les accepte en
+  avertissant, mais ils laissent un module à moitié initialisé : un écran blanc de ce
+  projet venait d'une constante qui valait `undefined` au chargement, et ni `tsc`, ni
+  le lint, ni le build n'avaient rien vu. Les valeurs partagées entre modules qui se
+  répondent vivent donc dans des modules feuilles (`lab.ts`, `skip.ts`), et le
+  magasin de jeu se **déclare** au module de compte au lieu d'être importé par lui.
 
 Ce qu'aucune ne fait : juger l'image. Animations, positions et rendu des sprites ne
 se vérifient qu'à l'œil, sur un appareil ou un émulateur.

@@ -1,4 +1,4 @@
-import { skipCost } from './formulas';
+import { skipCost } from './skip';
 import type { GameState, StatKey } from './types';
 
 /**

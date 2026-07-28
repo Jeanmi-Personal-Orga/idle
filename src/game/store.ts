@@ -21,7 +21,7 @@ import { enemySprite } from './content';
 import { CHARACTERS, DEFAULT_CHARACTER } from './characters';
 import type { Enemy, GameState } from './types';
 import { pushSave } from './api';
-import { authStore } from './auth';
+import { authStore, connectSaveBridge } from './auth';
 import { getItem, removeItem, setItem } from './storage';
 
 const KEY = 'brume.save.v1';
@@ -345,6 +345,13 @@ export function migrate(save: GameState): GameState | null {
 }
 
 export const store = new GameStore();
+
+// Le module de compte ne connaît pas le magasin : c'est le magasin qui se déclare,
+// ce qui évite un cycle d'imports entre les deux (voir `SaveBridge`).
+connectSaveBridge({
+  load: (state) => store.loadFromCloud(state),
+  snapshot: () => store.state,
+});
 
 // En développement seulement : permet d'observer l'état depuis un harnais de test
 // sans instrumenter le jeu lui-même.

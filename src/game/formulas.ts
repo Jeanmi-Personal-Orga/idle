@@ -274,7 +274,9 @@ export const goldOfferCost = (offer: { base: number; amount: number }, owned: nu
  * Prix en sacs d'or pour supprimer une attente. Il suit la durée restante : on
  * paie ce qu'on économise, pas un forfait.
  */
-export const skipCost = (secondsLeft: number) => Math.max(1, Math.ceil(secondsLeft / 45));
+// Réexportée pour l'interface, mais définie dans un module feuille : l'arbre de
+// recherche l'utilise, et l'importer d'ici fermait un cycle (voir skip.ts).
+export { skipCost } from './skip';
 
 /** Un seul réactif suffit à lancer une distillation, quel que soit le laboratoire : le hasard fait le reste. */
 export const distillCost = (_labLevel: number) => 1;
